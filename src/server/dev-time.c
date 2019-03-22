@@ -1,4 +1,7 @@
-//dev-time.c
+/**
+ * dev-time.c
+ * 
+ */
 #include "dev-time.h"
 #include <time.h>
 #include <string.h>
@@ -6,8 +9,8 @@
 #include <sys/time.h>
 
 static struct next_alarm {
-    time_t     alarm;
-    node_t     *setlist_head;
+    time_t     alarm; // 距离下一次闹钟的时间
+    node_t     *setlist_head; // 下一个时钟到的时候会触发该set链表中的事件
 } next = {.alarm = 0, .setlist_head = NULL};
 
 

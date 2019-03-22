@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #define     LOG_PATH   "/var/log/SHome_Server.log"
 #define     LOG_ERR(STR)    writelog(STR, strerror(errno))

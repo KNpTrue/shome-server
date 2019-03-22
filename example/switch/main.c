@@ -11,7 +11,7 @@
 #define   BUF_LEN     512
 #define   DEVICE_ID    "YCUCYYFI"
 #define   SERV_PORT    8003
-#define   SERV_ADDR    "127.0.0.1"
+#define   SERV_ADDR    "149.28.128.85"
 
 int main()
 {
@@ -21,10 +21,10 @@ int main()
     int fd = connServFd(AF_INET, SERV_ADDR, SERV_PORT);
     if(fd == -1)    return -1;
     //握手
-    char *keyName[] = {"isOpen", "R", "G", "B", "bright", "1", "2", NULL};
-    uint8_t keyType[] = {KEY_BOOL, KEY_RANGE, KEY_RANGE, KEY_RANGE, KEY_RANGE, KEY_BOOL, KEY_STRING};
-    uint8_t keyMode[] = {KEY_READWRITE, KEY_READWRITE, KEY_READWRITE, KEY_READWRITE, KEY_READWRITE, KEY_READWRITE, KEY_READWRITE};
-    char *keyUnit[] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+    char *keyName[] = {"isOpen", "R", "G", "B", "bright", NULL};
+    uint8_t keyType[] = {KEY_BOOL, KEY_RANGE, KEY_RANGE, KEY_RANGE, KEY_RANGE};
+    uint8_t keyMode[] = {KEY_READWRITE, KEY_READWRITE, KEY_READWRITE, KEY_READWRITE, KEY_READWRITE};
+    char *keyUnit[] = {NULL, NULL, NULL, NULL, NULL};
     node_t *keylist_head = initKeyList(keyName, keyType, keyMode, keyUnit);
     if(keylist_head == NULL)    goto err;
     if(!handShake(fd, (uint8_t *)DEVICE_ID, SM_LIGHT, keylist_head))

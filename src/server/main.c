@@ -3,6 +3,9 @@
 #include <time.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "event-loop.h"
 #include "event-socket.h"
@@ -10,7 +13,12 @@
 #include "dev-time.h"
 #include "web-config.h"
 #include "web-pack.h"
+#include "log.h"
 
+//初始化守护进程
+void initDaemon();
+//尝试fork fail_sleep失败后多少秒后尝试
+pid_t tryfork(int fail_sleep);
 //初始化信号
 void initSignal();
 //SIGINT处理函数 
@@ -22,6 +30,7 @@ static int epfd;
 
 int main(int argc, char *argv[])
 {
+    initDaemon(); //初始化守护进程
     readConf(); //读取配置文件
     //获取webConfig
     WebConfig_t *webConfig = getWebConfig();
@@ -105,4 +114,61 @@ void sigtime_cb(int signo)
     resetAlarm();
     travelList(*getToDoListHead(), (manipulate_callback)updateNextAlarm, NULL);
     setNextAlarm();
+}
+//尝试fork fail_sleep失败后多少秒后尝试
+pid_t tryfork(int fail_sleep);
+void initDaemon()
+{
+    pid_t pid;
+    pid = tryfork(1);
+    //pid = fork();
+    if(pid == -1)
+    {
+        LOG_ERR("fork: ");
+        exit(1);
+    }
+    else if(pid > 0)  //父进程
+        exit(0);
+    else if(pid == 0) // 子进程
+    {
+        setsid();//设置
+        chdir("~");
+        umask(0);
+        //重定向到/dev/null
+        int fd = open("/dev/null", O_RDWR);
+        if(fd == -1)
+        {
+            LOG_ERR("/dev/null: ");
+            exit(1);
+        }
+        dup2(fd, STDIN_FILENO);
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        if(fd > 2)
+            close(fd);
+    }
+}
+
+pid_t tryfork(int fail_sleep)
+{
+    int tries = 0;
+    pid_t pid;
+    while(1)
+    {
+        pid = fork();
+        if(pid == -1)
+        {
+            if(tries == 5)
+                return -1;
+            else
+            {
+                tries++;
+                if(fail_sleep > 0)
+                    sleep(fail_sleep);
+                continue;
+            }
+        }
+        else
+            return pid;
+    }
 }
