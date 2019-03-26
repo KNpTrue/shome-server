@@ -103,7 +103,7 @@ int connServFd(int domain, const char *addr, short port)
     return fd;
 }
 
-int handShake(int fd, uint8_t id[ID_LEN], uint8_t type, node_t *keylist_head)
+int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head)
 {
     //握手
     char buf[BUF_LEN], buf2[BUF_LEN];
@@ -116,7 +116,9 @@ int handShake(int fd, uint8_t id[ID_LEN], uint8_t type, node_t *keylist_head)
     {
         *p++ = id[i];
     }
-    *p++ = type;
+    //type
+    memcpy(p, &type, sizeof(dev_type_t));
+    p += sizeof(dev_type_t);
     //key
     *p++ = getNodeCount(keylist_head);
     travelList(keylist_head, (manipulate_callback)copyKeyHead_move, &p);

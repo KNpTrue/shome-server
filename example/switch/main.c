@@ -11,7 +11,7 @@
 #define   BUF_LEN     512
 #define   DEVICE_ID    "YCUCYYFI"
 #define   SERV_PORT    8003
-#define   SERV_ADDR    "149.28.128.85"
+#define   SERV_ADDR    "127.0.0.1"
 
 int main()
 {

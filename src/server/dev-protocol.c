@@ -14,7 +14,7 @@ uint32_t dePackage(const char *src, uint32_t srclen, char *dest, uint32_t destle
 
 DevConfig_t *dev_handShake(const char *buf, uint32_t buflen)
 {
-    if(buf == NULL || buflen < 4 + ID_LEN)
+    if(buf == NULL || buflen < 3 + ID_LEN)
     {
 #ifdef DEBUG_DEV
         fprintf(stderr, "<initDev>parameter illegal.\n");
@@ -38,7 +38,9 @@ DevConfig_t *dev_handShake(const char *buf, uint32_t buflen)
         id[i] = *p++;
     }
     //type
-    uint8_t type = *p++;
+    dev_type_t type;
+    memcpy(&type, p, sizeof(dev_type_t));
+    p += sizeof(dev_type_t);
     DevConfig_t *dev = seachOneByRequired(*getDevListHead(), 
                         (required_callback)isDevId, &id);
     if(!dev)
@@ -59,7 +61,8 @@ DevConfig_t *dev_handShake(const char *buf, uint32_t buflen)
     dev->type = type;
     //keyList
     uint8_t keyNum = *p++;
-    if(buflen < 5 + ID_LEN + keyNum * (KEY_LEN + 1 + 1 + UNIT_LEN)) goto err;
+    if(buflen < 3 + ID_LEN + sizeof(dev_type_t) + KEY_COUNT_BYTE + keyNum * (KEY_LEN + 1 + 1 + UNIT_LEN)) 
+        goto err;
     //将key串成链表
     node_t *head = NULL;
     _key_t *key;

@@ -6,6 +6,9 @@
 #ifndef _DEV_TYPE_H
 #define _DEV_TYPE_H
 
+//设备类型的长度是可以自定义的, 方便后面扩张展
+typedef unsigned char dev_type_t;
+
 enum dev_type {
     SM_SWITCH,  //开关
     SM_CAMERA,   //视频设备

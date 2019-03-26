@@ -30,7 +30,7 @@ static int epfd;
 
 int main(int argc, char *argv[])
 {
-    initDaemon(); //初始化守护进程
+    //initDaemon(); //初始化守护进程
     readConf(); //读取配置文件
     //获取webConfig
     WebConfig_t *webConfig = getWebConfig();

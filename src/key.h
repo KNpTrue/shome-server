@@ -7,6 +7,7 @@
 
 #define  KEY_LEN  32
 #define  UNIT_LEN 8
+#define  KEY_COUNT_BYTE 1 
 
 enum _symbol {
     SYM_EQUAL,   //=

@@ -64,6 +64,7 @@ char *json_packData(uint8_t type, void *tag, char *buf, int length)
     case PACK_WEBCONFIG: pack_addWebConfig(tag, data); break;
     case PACK_ALL: pack_addAll(data); break;
     }
+    //将json数据转换为字符串
     if(!cJSON_PrintPreallocated(root, buf, length, false))  goto err;
     cJSON_Delete(root);
     return buf;

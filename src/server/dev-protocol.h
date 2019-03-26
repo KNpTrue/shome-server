@@ -1,7 +1,7 @@
 /**
  * dev-protocol.h
  * 握手协议
- * |----4-----|----3-----|---8---|---1---|---1---|-KEY_LEN-|---1---|---1---|-UNIT_LEN-|
+ * |----4-----|----3-----|---8---|---4---|---1---|-KEY_LEN-|---1---|---1---|-UNIT_LEN-|
  *    MASK      dev_magic   id     type    keyNum  keyname  keytype keymode  keyunit
  * 
  * update

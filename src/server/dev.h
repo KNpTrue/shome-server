@@ -1,4 +1,16 @@
-//dev.h
+/**
+ * dev.h
+ * 这个头文件包含设备的描述的结构体, 以及操作它的各种方法, 还包含todo任务的方法
+ * DevConfig是一个通用的对一个设备进行描述的结构体, 它包括设备属性全面的描述
+ * 你可以轻松的将各种设备接入到这个系统中来
+ * 
+ * 设备的类型可以无限扩展, 详情看dev-type.h
+ * 
+ * todo任务的相关结构体在dev-detail.h中定义
+ * 
+ * 所有的设备, todo, set, room都是由链表管理, 通过get...list()来获取链表的头结点的指针
+ * 
+ */
 #ifndef _DEVICE_TREE_H
 #define _DEVICE_TREE_H
 
@@ -13,7 +25,7 @@ typedef struct DevConfig {
     bool        isOnline;       //是否在线
     char        id[ID_LEN + 1]; //设备的唯一标识
     char        name[NAME_LEN]; //设备名
-    uint8_t     type;           //设备的类型
+    dev_type_t  type;           //设备的类型
     node_t      *keyList_head;  //key-value链表
     void        *ep_event;      //eventConfig指针
     void        *todolist_head;
@@ -28,6 +40,7 @@ typedef struct DevConfig {
     }           detail; //详情由type决定
 #endif
 } DevConfig_t;
+
 //获得链表头指针的地址
 node_t **getToDoListHead();
 node_t **getDevListHead();

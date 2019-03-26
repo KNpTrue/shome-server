@@ -1,6 +1,6 @@
 /**
  * dev-time.c
- * 
+ * 定时任务的实现
  */
 #include "dev-time.h"
 #include <time.h>
@@ -13,9 +13,19 @@ static struct next_alarm {
     node_t     *setlist_head; // 下一个时钟到的时候会触发该set链表中的事件
 } next = {.alarm = 0, .setlist_head = NULL};
 
-
+/**
+ * 检查是不是当天要执行todo任务
+ * @wday: 当天是星期几
+*/
 bool isDayTodo(con_time_t *con_time, int wday); // wday 0~6
+/**
+ * 将con_time中的时间字符串转换成tm结构体中的时间
+ * @return: true成功, false则表示con_time中的时间格式错误
+*/
 bool setHourMin(con_time_t *con_time, struct tm *tm);
+/**
+ * 是不是闰年
+*/
 bool isLeapYear(int year);
 
 void updateNextAlarm(todo_t *todo)

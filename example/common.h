@@ -24,7 +24,7 @@ char *getGateWay(int domain, char *gateway);
 //连接服务器并返回一个文件描述符
 int connServFd(int domain, const char *addr, short port);
 //握手
-int handShake(int fd, uint8_t id[ID_LEN], uint8_t type, node_t *keylist_head);
+int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head);
 //打包
 uint32_t enPackage(const char *src, uint32_t srclen, char *dest, uint32_t destlen_max);
 //解包
