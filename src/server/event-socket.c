@@ -6,8 +6,10 @@
 #include <errno.h>
 
 #include "event-socket.h"
+#include "event-who.h"
 #include "web-pack.h"
 #include "../warp.h"
+#include "../log.h"
 
 //sockaddr
 union sockaddr_types {
@@ -24,17 +26,13 @@ int initListenFd(int domain, short port)
 {
     if(domain != AF_INET && domain != AF_INET6)
     {
-#ifdef DEBUG_EVENT
-        fprintf(stderr, "<initListenFd>domain error.\n");
-#endif //DEBUG_EVENT
+        loge(stderr, "<initListenFd>domain error.\n");
         return -1;
     }
     int listenfd = socket(domain, SOCK_STREAM, 0);
     if(listenfd == -1)
     {
-#ifdef DEBUG_EVENT
-        perror("<initListenFd>scoket err");
-#endif //DEBUG_EVENT
+        logp("<initListenFd>scoket err");
         return -1;
     }
     //设置端口复用
@@ -57,14 +55,10 @@ int initListenFd(int domain, short port)
     }
     if(bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)))
     {
-#ifdef DEBUG_EVENT
-        perror("<initListenFd>bind err");
-#endif //DEBUG_EVENT
+        logp("<initListenFd>bind err");
         return -1;
     }
-#ifdef DEBUG_EVENT
-    printf("server start! port: %d\n", port);
-#endif //DEBUG_EVENT
+    logd("server start! port: %d\n", port);
     listen(listenfd, MAX_LISTEN);
     return listenfd;
 }
@@ -80,18 +74,14 @@ int waitClient_cb(EventConfig_t *listenEvent)
         connfd = Accept(listenEvent->fd, (struct sockaddr *)&client_addr, &client_addr_len);
         if(connfd == -1)
         {
-#ifdef DEBUG_EVENT
-            perror("<waitWebClient_cb>accept err");
-#endif //DEBUG_EVENT
+            logp("<waitWebClient_cb>accept err");
             return -1;
         }
         else //success
         {
-#ifdef DEBUG_EVENT
             char client_ip[INET_ADDRSTRLEN];
-            printf("<server>client addr: %s port: %d\n", inet_ntop(AF_INET, 
+            logd("<server>client addr: %s port: %d\n", inet_ntop(AF_INET, 
             &client_addr.sin_addr.s_addr, client_ip, INET_ADDRSTRLEN), ntohs(client_addr.sin_port));
-#endif //DEBUG_EVENT
         }
     }
     else //ipv6
@@ -102,18 +92,14 @@ int waitClient_cb(EventConfig_t *listenEvent)
         connfd = Accept(listenEvent->fd, (struct sockaddr *)&client_addr, &client_addr_len);
         if(connfd == -1)
         {
-#ifdef DEBUG_EVENT
-            perror("<waitWebClient_cb>accept err");
-#endif //DEBUG_EVENT
+            logp("<waitWebClient_cb>accept err");
             return -1;
         }
         else //success
         {
-#ifndef DEBUG_EVENT
             char client_ip[INET6_ADDRSTRLEN];
-            printf("<server>client addr: %s port: %d\n", inet_ntop(AF_INET6,
+            logd("<server>client addr: %s port: %d\n", inet_ntop(AF_INET6,
             &client_addr.sin6_addr, client_ip, INET6_ADDRSTRLEN), ntohs(client_addr.sin6_port));
-#endif //DEBUG_EVENT
         }
     }
     //设置成非阻塞
@@ -134,9 +120,7 @@ int waitClient_cb(EventConfig_t *listenEvent)
     }
     if(connEvent == NULL) //如果失败
     {
-#ifdef DEBUG_EVENT
-        fprintf(stderr, "<waitWebClient_cb>initAccept err, close connfd.\n");
-#endif //DEBUG_EVENT
+        loge(stderr, "<waitWebClient_cb>initAccept err, close connfd.\n");
         close(connfd);
         return 0;
     }
@@ -158,15 +142,7 @@ int recvClient_cb(EventConfig_t *connEvent)
 int sendClient_cb(EventConfig_t *connEvent)
 {
     char *buf = connEvent->buf;
-#ifdef DEBUG_EVENT
-    printf("%s\nbuflen: %d\nsend: ", buf, connEvent->buflen);
-    int i;
-    for(i = 0; i < connEvent->buflen; i++)
-    {
-        printf("%02X ", (unsigned char)connEvent->buf[i]);
-    }
-    printf("\n");
-#endif //DEBUG_EVENT
+    logd("%s\nbuflen: %d\nsend: ", buf, connEvent->buflen);
     Write(connEvent->fd, buf, connEvent->buflen); //回写客户端
     //将事件切换成读事件
     _switchEventMode(connEvent, EPOLLIN, recvClient_cb);
@@ -200,25 +176,19 @@ int _recvWebClient_cb(EventConfig_t *connEvent)
         const char *key_flag[] = {"Sec-WebSocket-Key: ", "Sec-WebSocket-Protocol: "};
         if(!getWebSocketValue(buf, srckey, WEBSOCKET_KEY_LEN, key_flag[0]))
         {
-#ifdef DEBUG_EVENT
-            fprintf(stderr, "<recvWebClient_cb>getWebSocketValue: Can't get websocket-key, close connect.\n");
-#endif //DEBUG_EVENT
+            loge(stderr, "<recvWebClient_cb>getWebSocketValue: Can't get websocket-key, close connect.\n");
             goto err;
         }
         char subkey[WEBSOCKET_KEY_LEN];
         if(!getWebSocketValue(buf, subkey, WEBSOCKET_KEY_LEN, key_flag[1]))
         {
-#ifdef DEBUG_EVENT
-            fprintf(stderr, "<recvWebClient_cb>getWebSocketValue: Can't get websocket-protocol, close connect.\n");
-#endif //DEBUG_EVENT
+            loge(stderr, "<recvWebClient_cb>getWebSocketValue: Can't get websocket-protocol, close connect.\n");
             goto err;
         }
         //认证
         if(!isSubKeyRight(subkey)) //认证错误
         {
-#ifdef DEBUG_EVENT
-            fprintf(stderr, "<recvWebClient_cb>isSubKeyRight: sub-Key error, close connect.\n");
-#endif //DEBUG_EVENT
+            loge(stderr, "<recvWebClient_cb>isSubKeyRight: sub-Key error, close connect.\n");
             goto err;
         }
         //编码websocket-key
@@ -238,9 +208,7 @@ int _recvWebClient_cb(EventConfig_t *connEvent)
                             BUF_LEN, &depackage_data_len);
         if(ret == OP_ERR || ret == OP_DISCONN || ret == OP_CONTINUE)
         {
-#ifdef DEBUG_EVENT
-            printf("-------opCode: %02X--------\n", ret);
-#endif //DEBUG_EVENT
+            logd("<websocket> opCode: %02X\n", ret);
             goto err;
         }
         else  //处理包数据, 包括ping和pong，都由用户处理

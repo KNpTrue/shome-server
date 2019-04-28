@@ -46,7 +46,7 @@ int main()
         memset(buf2,  0, BUF_LEN);
         p = buf2;
         travelList(keylist_head, (manipulate_callback)valueToBuf, &p);
-        len = enPackage(buf2, p - buf2, buf, BUF_LEN);
+        len = dev_enPackage(buf2, p - buf2, buf, BUF_LEN);
         if(len == 0)   goto err;
         if(Write(fd, buf, len) <= 0)    goto err;
         sleep(1);

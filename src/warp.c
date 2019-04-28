@@ -66,7 +66,7 @@ ssize_t Read_unblock(int fd, void *buf, size_t count)
             char tmp[count];
             //while(Read(connfd, tmp, BUF_LEN) < 0); //一种选择将剩余数据全部抛弃
             if(Read(fd, tmp, count) > 0) //超过buf
-            return -1; //另外一种是直接将连接关闭
+                return -1; //另外一种是直接将连接关闭
         }
         else if(rcount == 0) //客户端关闭
             return -1;

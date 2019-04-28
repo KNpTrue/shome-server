@@ -36,6 +36,8 @@ int closeVideo(int devfd);
  * @datalen: 数据容量
  * @return: 成功返回data的大小， 错误返回-1
 */
-int getYuvData(int devfd, uint8_t *data, uint32_t datalen_max);
+long getYuvData(int devfd, uint8_t **data);
+
+int returnYuvData(int devfd);
 
 #endif //_VIDEO_H

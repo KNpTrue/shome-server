@@ -16,6 +16,11 @@ typedef struct {
 
 static memInfo_t memMap[V4L2_BUFS_COUNT];
 
+static struct v4l2_buffer runbuf = {
+    .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+    .memory = V4L2_MEMORY_MMAP
+};
+
 int initVideo(const char *dev, uint32_t width, uint32_t height)
 {
     int devfd = open(dev, O_RDWR); //打开设备文件
@@ -182,36 +187,30 @@ int closeVideo(int devfd)
         return 0;
 }
 
-int getYuvData(int devfd, uint8_t *data, uint32_t datalen_max)
+long getYuvData(int devfd, uint8_t **data)
 {
-    struct v4l2_buffer buf;
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
     //出队采集好的数据，为采集好的阻塞
-    if(ioctl(devfd, VIDIOC_DQBUF, &buf) == -1)
+    if(ioctl(devfd, VIDIOC_DQBUF, &runbuf) == -1)
     {
 #ifdef DEBUG_DEV
         perror("<getYuvData>ioctl VIDIOC_DQBUF");
 #endif //DEBUG_DEV
         return -1;
     }
-    int len = buf.bytesused;
-    if(len > datalen_max)
-    {
-#ifdef DEBUG_DEV
-        fprintf(stderr, "<getYuvData>datalen is too short.\n");
-#endif //DEBUG_DEV
-        ioctl(devfd, VIDIOC_QBUF, &buf);
-        return -1;
-    }
-    memcpy(data, memMap[buf.index].addr, len);
+    
+    //memcpy(data, memMap[runbuf.index].addr, runbuf.bytesused);
+    *data = memMap[runbuf.index].addr;
+    return runbuf.bytesused;
+}
 
-    if(ioctl(devfd, VIDIOC_QBUF, &buf) == -1)
+int returnYuvData(int devfd)
+{
+    if(ioctl(devfd, VIDIOC_QBUF, &runbuf) == -1)
     {
 #ifdef DEBUG_DEV
         perror("<getYuvData>ioctl VIDIOC_QBUF");
 #endif //DEBUG_DEV
         return -1;
     }
-    return len;
+    return 0;
 }

@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 
 #include <stdbool.h>
-#include "event-loop.h"
+#include "../event/loop.h"
 #include "web-protocol.h"
 #include "dev-protocol.h"
 

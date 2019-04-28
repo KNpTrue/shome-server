@@ -11,8 +11,8 @@
 
 #define  DEV_PATH  "/dev/video0"
 #define  FB_PATH   "/dev/fb0"
-#define  VIDEO_W   1280
-#define  VIDEO_H   720
+#define  VIDEO_W   640
+#define  VIDEO_H   480
 
 #define clamp(v) (v < 0 ? 0 : (v > 255 ? 255 : v))
 
@@ -27,7 +27,6 @@ static int devfd;
 static int fbfd;
 static uint32_t maplen;
 static uint8_t *map;
-static uint8_t *yuyv;
 
 int main()
 {
@@ -37,18 +36,18 @@ int main()
     //fb
     uint32_t fb_w, fb_h;
     fbfd = initFb(FB_PATH, &map, &maplen, &fb_w, &fb_h);
+    printf("%d, %d\n", fb_w, fb_h);
     if(fbfd == -1)  return -1;
     uint32_t yuyvlen;
-    uint32_t yuyvlen_max = VIDEO_W * VIDEO_H << 1;
     uint8_t *p;
     uint32_t i, j;
+    uint8_t *yuyv; //= malloc(VIDEO_W * VIDEO_H << 1);
     int y0, u0, y1, v1;
-    yuyv = malloc(yuyvlen_max);
     //开始采集
     startVideo(devfd);
     while(1)
     {
-        yuyvlen = getYuvData(devfd, yuyv, yuyvlen_max);
+        yuyvlen = getYuvData(devfd, &yuyv);
         if(yuyvlen == -1)   break;
         p = yuyv;
         for(i = 0; i < VIDEO_H; i++)
@@ -57,7 +56,6 @@ int main()
             {
                 y0 = p[0], u0 = p[1], y1 = p[2], v1 = p[3];
                 p += 4;
-                
                 map[(i * fb_w + j) * 4 + 2] = clamp(y0 + 1.402 * (v1 -128)); //r
 				map[(i * fb_w + j) * 4 + 1] = clamp(y0 - 0.344 * (u0 - 128) - 0.714 * (v1 -128)); // g
 				map[(i * fb_w + j) * 4 + 0] = clamp(y0 + 1.772 * (u0 - 128)); //b
@@ -67,8 +65,8 @@ int main()
 				map[(i * fb_w + j + 1) * 4 + 0] = clamp(y1 + 1.772 * (u0 - 128)); //b
             }
         }
+        returnYuvData(devfd);
     }
-    free(yuyv);
     closeFb(fbfd, map, maplen);
     closeVideo(devfd);
     return 0;
@@ -84,7 +82,6 @@ void initSignal()
 
 void sigint_cb(int signo)
 {
-    free(yuyv);
     closeFb(fbfd, map, maplen);
     closeVideo(devfd);
     exit(0);

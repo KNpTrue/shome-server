@@ -4,7 +4,7 @@
 #include "web-pack.h"
 #include "sha1-use.h"
 #include "base64.h"
-#include "random.h"
+#include "../random.h"
 
 #include <string.h>
 #include <stdio.h>

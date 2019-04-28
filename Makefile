@@ -1,9 +1,9 @@
 
 #宏定义
-DEFS = -D DEBUG_DEV -D DEBUG_EVENT -D DEBUG_WEB
+DEFS = -D DEBUG_DEV -D DEBUG_EVENT -D DEBUG_WEB -D DEBUG
 #位值参数
 export CFLAGS += \
-		$(DEFS)
+		$(DEFS)\
 
 all : switch server sensor
 
@@ -13,11 +13,14 @@ switch : mkswitch mkdev-common mkcommon
 sensor : mksensor mkdev-common mkcommon
 	$(CROSS_COMPILE)gcc example/libdev-common.o example/sensor/libsensor.o src/libcommon.o -o target/$@
 
-server : mkserver mkcommon mkcJSON
-	$(CROSS_COMPILE)gcc src/server/libserver.o src/cJSON/libcjson.o src/libcommon.o -o target/$@ -static
+server : mkserver mkcommon mkcJSON mkevent
+	$(CROSS_COMPILE)gcc src/server/libserver.o src/cJSON/libcjson.o src/event/libevent.o src/libcommon.o -o target/$@
 
 mkserver :
 	make CROSS_COMPILE=$(CROSS_COMPILE) -C src/server/
+
+mkevent :
+	make CROSS_COMPILE=$(CROSS_COMPILE) -C src/event/
 
 mkcommon :
 	make CROSS_COMPILE=$(CROSS_COMPILE) -C src/
@@ -38,6 +41,7 @@ mkcJSON :
 clean:
 	make -C src/server/ clean
 	make -C src/cJSON/ clean
+	make -C src/event/ clean
 	make -C src/ clean
 	make -C example/ clean
 	make -C example/switch/ clean

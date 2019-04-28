@@ -8,6 +8,7 @@
 #include "../src/key.h"
 #include "../src/list.h"
 #include "../src/dev-type.h"
+#include "../src/dev-encrypt.h"
 
 #define DEV_SWITCH
 
@@ -25,10 +26,6 @@ char *getGateWay(int domain, char *gateway);
 int connServFd(int domain, const char *addr, short port);
 //握手
 int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head);
-//打包
-uint32_t enPackage(const char *src, uint32_t srclen, char *dest, uint32_t destlen_max);
-//解包
-uint32_t dePackage(const char *src, uint32_t srclen, char *dest, uint32_t destlen_max);
 
 //key return head
 node_t *initKeyList(char *keyName[], uint8_t *keyType, uint8_t *keyMode, char *keyUnit[]);

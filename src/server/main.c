@@ -7,13 +7,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "event-loop.h"
+#include "../event/loop.h"
+#include "../log.h"
+#include "event-who.h"
 #include "event-socket.h"
 #include "config.h"
 #include "dev-time.h"
 #include "web-config.h"
 #include "web-pack.h"
-#include "log.h"
 
 //初始化守护进程
 void initDaemon();
@@ -36,7 +37,7 @@ int main(int argc, char *argv[])
     WebConfig_t *webConfig = getWebConfig();
     initSignal();
     srand(time(NULL)); //设置随机种子
-    epfd = loopInit(); //epoll_create
+    epfd = loopInit(HASH_MAX, getHash); //epoll_create
     if(epfd == -1)  return -1;
     int domain[2] = {AF_INET, AF_INET6};
     int i;
@@ -124,7 +125,7 @@ void initDaemon()
     //pid = fork();
     if(pid == -1)
     {
-        LOG_ERR("fork: ");
+        logp("fork: ");
         exit(1);
     }
     else if(pid > 0)  //父进程
@@ -138,7 +139,7 @@ void initDaemon()
         int fd = open("/dev/null", O_RDWR);
         if(fd == -1)
         {
-            LOG_ERR("/dev/null: ");
+            logp("/dev/null: ");
             exit(1);
         }
         dup2(fd, STDIN_FILENO);

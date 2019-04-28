@@ -16,8 +16,6 @@ union sockaddr_types {
     struct sockaddr_in6 in6;
 };
 
-void getRandomString(uint8_t *str, uint32_t strlen);
-
 char *getGateWay(int domain, char *gateway)
 {
     if(domain != AF_INET && domain != AF_INET6)
@@ -123,69 +121,22 @@ int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head)
     *p++ = getNodeCount(keylist_head);
     travelList(keylist_head, (manipulate_callback)copyKeyHead_move, &p);
     //打包加密
-    uint32_t len = enPackage(buf, p - buf, buf2, BUF_LEN);
+    uint32_t len = dev_enPackage(buf, p - buf, buf2, BUF_LEN);
     if(len == 0)    return -1;
     int ret = Write(fd, buf2, len);
     if(ret <= 0)    return -1;
     ret = Read(fd, buf, BUF_LEN);
     if(ret <= 0)    return -1;
-    len = dePackage(buf, ret, buf2, BUF_LEN);
+    len = dev_dePackage(buf, ret, buf2, BUF_LEN);
     if(len == 0)    return -1;
     if(strncmp(buf2, DEV_MAGIC, len)) return -1;
     p = buf;
     travelList(keylist_head, (manipulate_callback)valueToBuf, &p);
-    len = enPackage(buf, p - buf, buf2, BUF_LEN);
+    len = dev_enPackage(buf, p - buf, buf2, BUF_LEN);
     if(len == 0)    return -1;
     ret = Write(fd, buf2, len);
     if(ret <= 0)    return -1;
     return 0;
-}
-
-uint32_t enPackage(const char *src, uint32_t srclen, char *dest, uint32_t destlen_max)
-{
-    if(src == NULL || dest == NULL || srclen + MASKEY_LEN > destlen_max)
-        return 0; 
-    //使用掩码
-    uint8_t maskey[MASKEY_LEN] = {0};
-    getRandomString(maskey, MASKEY_LEN); //获得掩码
-    memcpy(dest, maskey, MASKEY_LEN);
-    dest += MASKEY_LEN;
-    //加密
-    uint32_t i;
-    for(i = 0; i < srclen; i++)
-    {
-        *dest++ = src[i] ^ maskey[i % 4];
-    }
-    return srclen + MASKEY_LEN;
-}
-
-uint32_t dePackage(const char *src, uint32_t srclen, char *dest, uint32_t destlen_max)
-{
-    if(src == NULL || dest == NULL || srclen - MASKEY_LEN > destlen_max)
-        return 0;
-    //掩码
-    uint8_t maskey[MASKEY_LEN];
-    uint32_t i;
-    for(i = 0; i < MASKEY_LEN; i++)
-    {
-        maskey[i] = *src++;
-    }
-    srclen -= MASKEY_LEN;
-    //解数据
-    for(i = 0; i < srclen; i++)
-    {
-        *dest++ = src[i] ^ maskey[i % 4];
-    }
-    return srclen; 
-}
-
-void getRandomString(uint8_t *str, uint32_t strlen)
-{
-    int i;
-    for(i = 0; i < strlen; i++)
-    {
-        str[i] = (uint8_t)rand() % 256;
-    }
 }
 
 node_t *initKeyList(char *keyName[], uint8_t *keyType, uint8_t *keyMode, char *keyUnit[])
