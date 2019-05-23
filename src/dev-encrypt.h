@@ -5,7 +5,7 @@
 #ifndef __DEV_ENCRYPT_H
 #define __DEV_ENCRYPT_H
 
-#include <stdint.h>
+#include "shome-types.h"
 
 /**
  * @brief 打包
@@ -17,7 +17,8 @@
  * @retval >0 success
  * @retval 0 fail
  */
-uint32_t dev_enPackage(const char *src, uint32_t srclen, char *dest, uint32_t destlen_max);
+uint32_t dev_enPackage(const char *src, uint32_t srclen, 
+                        char *dest, uint32_t destlen_max, rand_callback_t cb);
 
 /**
  * @brief 解包

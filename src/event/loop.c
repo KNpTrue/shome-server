@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #include "loop.h"
 #include "../warp.h"
@@ -20,24 +21,25 @@ bool isEventFd_cb(void *data, void *tag);
 //回调函数 关闭描述符
 void destoryEvtConfig_cb(void *data);
 
-EventConfig_t *initEvent(int epfd, int fd, uint32_t event, 
-callback_t callback, uint8_t who, int domain)
+EventConfig_t *eventInit(int epfd, int fd, uint32_t event, callback_t read_callback, 
+                         callback_t write_callback, uint8_t who, int domain)
 {
-   if(domain != AF_INET && domain != AF_INET6)
+   if(domain != AF_INET && domain != AF_INET6 && domain != -1)
     {
-        loge(stderr, "<initEvent>domain error.\n");
+        loge("<initEvent>domain error.\n");
         return NULL;
     }
     EventConfig_t *eventConfig = (EventConfig_t *)malloc(sizeof(EventConfig_t));
     if(eventConfig == NULL)
     {
-        loge(stderr, "<initEvent>malloc error.\n");
+        loge("<initEvent>malloc error.\n");
         return NULL;
     }
     eventConfig->epfd = epfd;
     eventConfig->fd = fd;
     eventConfig->event = event;
-    eventConfig->callback = callback;
+    eventConfig->read_callback = read_callback;
+    eventConfig->write_callback = write_callback;
     eventConfig->registered = false;
     eventConfig->who = who;
     eventConfig->domain = domain;
@@ -83,6 +85,8 @@ int eventAdd(EventConfig_t *event)
         logp("<eventAdd>epoll_ctl err");
         return -1;
     }
+    event->cur_callback = (event->event == EPOLLIN) ? 
+        event->read_callback : event->write_callback;
     event->registered = true;
     return 0;
 }
@@ -113,16 +117,18 @@ int eventMod(EventConfig_t *event)
     epevt.events = event->event;
     if(epoll_ctl(event->epfd, EPOLL_CTL_MOD, event->fd, &epevt)) //如果返回-1
     {
-        logp("<eventAdd>epoll_ctl err");
+        logp("<eventMod>epoll_ctl err");
         return -1;
     }
+    event->cur_callback = (event->event == EPOLLIN) ? 
+        event->read_callback : event->write_callback;
     return 0;
 }
 
 int loop(int epfd)
 {
     int waitNums; //epoll_wait返回的个数
-    int i;
+    int i, ret;
     while(1)
     {
         waitNums = epoll_wait(epfd, retEvents, EPOLL_MAX_LISTEN, -1);
@@ -136,7 +142,8 @@ int loop(int epfd)
         for(i = 0; i < waitNums; i++)
         {
             eventConfig = (EventConfig_t *)retEvents[i].data.ptr;
-            eventConfig->callback(eventConfig);
+            ret = eventConfig->cur_callback(eventConfig);
+            if(ret)    return ret;
         }
     }
     return 0;
@@ -161,6 +168,11 @@ void travelEventList(uint8_t who, manipulate_callback manipulate, void *tag)
 void *seachOneEventList(uint8_t who, required_callback required, void *tag)
 {
     return seachOneByRequired(eventlist_head[getHash(who)], required, tag);
+}
+
+void *seachOneByIdxEventList(uint8_t who, uint32_t idx)
+{
+    return seachOneByIdx(eventlist_head[getHash(who)], idx);
 }
 
 bool isEmptyEventList(uint8_t who)

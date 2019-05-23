@@ -5,7 +5,7 @@
  * 避免使用到不存在的或者不安全的数据
  */
 #include "web-pack.h"
-#include "../cJSON/cJSON.h" //包含json相关操作函数的库
+#include <cJSON.h> //包含json相关操作函数的库
 #include "dev.h"
 #include "web-config.h"
 #include "event-socket.h"
@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 enum {
     METHOD_GET,
@@ -23,6 +24,8 @@ enum {
     TYPE_ALL,
     TYPE_DEV,
     TYPE_ROOM,
+    TYPE_TODO,
+    TYPE_SET
 };
 
 char *pack_typeToString(uint8_t type);
@@ -41,6 +44,8 @@ void addDevToArray(DevConfig_t *dev, cJSON *array);
 void addTodoToArray(todo_t *todo, cJSON *array);
 void addSetToArray(task_set_t *set, cJSON *array);
 void addRoomToArray(room_t *room, cJSON *array);
+//从JSON数据中读出key
+int getKeyByJson(_key_t *key, cJSON *what);
 
 char *json_packData(uint8_t type, void *tag, char *buf, int length)
 {
@@ -101,7 +106,7 @@ uint32_t json_analysis(const char *src, char *dest, uint32_t destlen_max)
         switch(type->valueint)
         {
         case TYPE_DEV:; // { id: '', who: 'name'|'key', what: ''|{ name:'', value: ...}}
-            DevConfig_t *dev = seachOneByRequired(*getDevListHead(), 
+            DevConfig_t *dev = seachOneByRequired(devlist_head, 
                                 (required_callback)isDevId, id->valuestring);
             if(!dev)    goto err1;
             if(!strcmp(who->valuestring, "name")) // who == "name"
@@ -130,33 +135,32 @@ uint32_t json_analysis(const char *src, char *dest, uint32_t destlen_max)
                 char *buf = malloc(BUF_LEN);
                 uint32_t len = dev_makeData(buf, key);
                 EventConfig_t *evt = (EventConfig_t *)dev->ep_event;
-                evt->buflen = dev_enPackage(buf, len, evt->buf, BUF_LEN);
-                _switchEventMode(evt, EPOLLOUT, sendClient_cb);
+                evt->buflen = dev_enPackage(buf, len, evt->buf, BUF_LEN, rand);
+                _switchEventMode(evt, EPOLLOUT);
                 memcpy(&key->value, backup, sizeof(key->value));
                 free(backup);
                 free(buf);
             }
             break;
         case TYPE_ROOM:;
-            node_t **roomlist_head = getRoomListHead();
-            room_t *room = seachOneByRequired(*roomlist_head, 
-                    (required_callback)isRoomId, &id->valueint);
+            room_t *room = seachOneByRequired(roomlist_head, 
+                    (required_callback)ext_isId, &id->valueint);
             if(room == NULL) // 添加房间 { id: -1, who: 'add', what: 'name'}
             {
                 if(!strcmp(who->valuestring, "add")) // who == "name"
                 {
                     room_t *newroom = initRoom();
                     if(newroom == NULL)    goto err1;
-                    strncpy(newroom->name, what->valuestring, NAME_LEN);
-                    newroom->id = getNewId(*roomlist_head, (getMaxId_callback)getRoomMaxId);
-                    appendTailList(roomlist_head, newroom);
+                    strncpy(newroom->base.name, what->valuestring, NAME_LEN);
+                    newroom->base.id = ext_getNewId(roomlist_head);
+                    appendTailList(&roomlist_head, newroom);
                     sendDataToWeb(PACK_ALL, NULL);
                 }
                 else goto err1;
             }
             if(!strcmp(who->valuestring, "name")) // who == "name"
             {
-                strncpy(room->name, what->valuestring, NAME_LEN);
+                strncpy(room->base.name, what->valuestring, NAME_LEN);
                 sendDataToWeb(PACK_ROOM, room);
             }
             else if(!strcmp(who->valuestring, "adddev"))
@@ -176,10 +180,55 @@ uint32_t json_analysis(const char *src, char *dest, uint32_t destlen_max)
             }
             else if(!strcmp(who->valuestring, "del"))
             {
-                deleteNode(roomlist_head, (required_callback)isRoomId, 
-                    &room->id, (destory_callback)destoryRoom);
+                deleteNode(&roomlist_head, (required_callback)ext_isId, 
+                    &room->base.id, (destory_callback)destoryRoom);
                 int tmp = -1;
-                travelList(*roomlist_head, (manipulate_callback)sortRoomId, &tmp);
+                travelList(roomlist_head, (manipulate_callback)ext_sortId_cb, &tmp);
+                sendDataToWeb(PACK_ALL, NULL);
+            }
+            break;
+        case TYPE_TODO:
+            break;
+        case TYPE_SET:;
+            task_set_t *set = seachOneByRequired(setlist_head, 
+                    (required_callback)ext_isId, &id->valueint);
+            if(set == NULL) // 添加Set { id: -1, who: 'add', what: 'name'}
+            {
+                if(!strcmp(who->valuestring, "add")) // who == "name"
+                {
+                    task_set_t *newset = initTaskSet();
+                    if(newset == NULL)    goto err1;
+                    strncpy(newset->base.name, what->valuestring, NAME_LEN);
+                    newset->base.id = ext_getNewId(setlist_head);
+                    appendTailList(&setlist_head, newset);
+                    sendDataToWeb(PACK_ALL, NULL);
+                }
+                else goto err1;
+            }
+            if(!strcmp(who->valuestring, "name"))
+            {
+                strncpy(set->base.name, what->valuestring, NAME_LEN);
+                sendDataToWeb(PACK_SET, set);
+            }
+            else if(!strcmp(who->valuestring, "adddev")) // { "id": x, "who": "adddev", "what": {id: x, key: {...}}}
+            {
+                task_dev_t *task_dev = initTaskDev();
+                if(task_dev == NULL)    goto err1;
+                task_dev->base.id = ext_getNewId(set->task_devList_head);
+                if(!getKeyByJson(&task_dev->key, what))
+                {
+                    free(task_dev);
+                    goto err1;
+                }
+                appendList(&set->task_devList_head, task_dev);
+                sendDataToWeb(PACK_SET, set);
+            }
+            else if(!strcmp(who->valuestring, "del"))
+            {
+                deleteNode(&setlist_head, (required_callback)ext_isId, 
+                    &set->base.id, (destory_callback)destoryTaskSet);
+                int tmp = -1;
+                travelList(setlist_head, (manipulate_callback)ext_sortId_cb, &tmp);
                 sendDataToWeb(PACK_ALL, NULL);
             }
             break;
@@ -218,7 +267,7 @@ void pack_addDev(DevConfig_t *devConfig, cJSON *data)
     cJSON_AddStringToObject(data, "id", devConfig->id);
     cJSON_AddBoolToObject(data, "online", devConfig->isOnline);
     cJSON_AddNumberToObject(data, "type", devConfig->type);
-    if(devConfig->room) cJSON_AddNumberToObject(data, "roomid", devConfig->room->id);
+    if(devConfig->room) cJSON_AddNumberToObject(data, "roomid", devConfig->room->base.id);
     else cJSON_AddNumberToObject(data, "roomid", -1);
     cJSON *keylist = cJSON_AddArrayToObject(data, "keylist");
     travelList(devConfig->keyList_head, (manipulate_callback)addKeyToArray, keylist);
@@ -227,8 +276,8 @@ void pack_addDev(DevConfig_t *devConfig, cJSON *data)
 void pack_addTodo(todo_t *todo, cJSON *data)
 {
     if(!data || !todo)   return;
-    cJSON_AddStringToObject(data, "name", todo->name);
-    cJSON_AddNumberToObject(data, "id", todo->id);
+    cJSON_AddStringToObject(data, "name", todo->base.name);
+    cJSON_AddNumberToObject(data, "id", todo->base.id);
     cJSON_AddNumberToObject(data, "set_id", todo->set_id);
     cJSON_AddNumberToObject(data, "con_type", todo->condition.type);
     cJSON *condition = cJSON_AddObjectToObject(data, "condition");
@@ -252,8 +301,8 @@ void pack_addTodo(todo_t *todo, cJSON *data)
 void pack_addSet(task_set_t *set, cJSON *data)
 {
     if(!data || !set)   return;
-    cJSON_AddNumberToObject(data, "id", set->id);
-    cJSON_AddStringToObject(data, "name", set->name);
+    cJSON_AddNumberToObject(data, "id", set->base.id);
+    cJSON_AddStringToObject(data, "name", set->base.name);
     cJSON *tasklist = cJSON_AddArrayToObject(data, "tasklist");
     travelList(set->task_devList_head, (manipulate_callback)addTaskToArray, tasklist);
 }
@@ -261,8 +310,8 @@ void pack_addSet(task_set_t *set, cJSON *data)
 void pack_addRoom(room_t *room, cJSON *data)
 {
     if(!data || !room)   return;
-    cJSON_AddNumberToObject(data, "id", room->id);
-    cJSON_AddStringToObject(data, "name", room->name);
+    cJSON_AddNumberToObject(data, "id", room->base.id);
+    cJSON_AddStringToObject(data, "name", room->base.name);
     cJSON *devlist = cJSON_AddArrayToObject(data, "devlist");
     travelList(room->roomDevList_head, (manipulate_callback)addRoomDevIdToArray, devlist);
 }
@@ -285,10 +334,10 @@ void pack_addAll(cJSON *data)
         "roomlist"
     };
     node_t *heads[] = {
-        *getDevListHead(),
-        *getToDoListHead(),
-        *getSetListHead(),
-        *getRoomListHead()
+        devlist_head,
+        todolist_head,
+        setlist_head,
+        roomlist_head
     };
     manipulate_callback call_back[] = {
         (manipulate_callback)addDevToArray,
@@ -341,7 +390,8 @@ void addTaskToArray(task_dev_t *task, cJSON *array)
     if(!task || !array) return;
     cJSON *taskobj;
     cJSON_AddItemToArray(array, taskobj = cJSON_CreateObject());
-    cJSON_AddStringToObject(taskobj, "id", task->id);
+    cJSON_AddNumberToObject(taskobj, "idx", task->base.id);
+    cJSON_AddStringToObject(taskobj, "devid", task->devid);
     cJSON *keyobj = cJSON_AddObjectToObject(taskobj, "key");
     addKeyToObj(&task->key, keyobj, false);
 }
@@ -382,4 +432,39 @@ void addRoomToArray(room_t *room, cJSON *array)
     cJSON *roomobj;
     cJSON_AddItemToArray(array, roomobj = cJSON_CreateObject());
     pack_addRoom(room, roomobj);
+}
+
+int getKeyByJson(_key_t *key, cJSON *what)
+{
+    cJSON *json = cJSON_GetObjectItem(what, "key");
+    if(key == NULL) return -1;
+    cJSON *name = cJSON_GetObjectItem(json, "name"); if(name == NULL)   return -1;
+    strncpy(key->name, name->valuestring, NAME_LEN);
+    cJSON *type = cJSON_GetObjectItem(json, "type");    if(type == NULL)    return -1;
+    key->type = type->valueint;
+    cJSON *value = cJSON_GetObjectItem(json, "value");
+    if(value == NULL)   return -1;
+    switch(key->type)
+    {
+    case KEY_BOOL: key->value.bool_ = value->valueint; break;
+    case KEY_STRING: strncpy(key->value.string_, value->valuestring, KEY_LEN); break;
+    case KEY_NUMBER: key->value.number_ = value->valuedouble; break;
+    case KEY_RANGE:
+        key->value.range_.num = value->valuedouble;
+        char *strings[] = {
+            "top",
+            "btn",
+            "step"
+        };
+        cJSON *obj[3];
+        int i;
+        for(i = 0; i < 3; i++)
+        {
+            obj[i] = cJSON_GetObjectItem(json, strings[i]);   if(obj[i] == NULL) return -1;
+        }
+        key->value.range_.top = obj[0]->valueint;
+        key->value.range_.btn = obj[1]->valueint;
+        key->value.range_.step = obj[2]->valuedouble;
+        break;
+    }
 }

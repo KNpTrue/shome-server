@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "../list.h"
 #include "../event/loop.h"
 #include "../log.h"
 #include "event-who.h"
@@ -31,13 +32,18 @@ static int epfd;
 
 int main(int argc, char *argv[])
 {
+    //list init
+    list_malloc = malloc;
+    list_free = free;
+    
     //initDaemon(); //初始化守护进程
     readConf(); //读取配置文件
     //获取webConfig
     WebConfig_t *webConfig = getWebConfig();
     initSignal();
     srand(time(NULL)); //设置随机种子
-    epfd = loopInit(HASH_MAX, getHash); //epoll_create
+    //epoll_create
+    epfd = loopInit(HASH_MAX, getHash); 
     if(epfd == -1)  return -1;
     int domain[2] = {AF_INET, AF_INET6};
     int i;
@@ -50,8 +56,8 @@ int main(int argc, char *argv[])
         webSocketFd = initListenFd(domain[i], web_port[i]);
         if(webSocketFd == -1)   return -2;
         //将socket绑定到epoll监听树上
-        webSocketEvent = initEvent(epfd, webSocketFd, EPOLLIN, 
-        waitClient_cb, WEBSOCKET_LISTENER, domain[i]);
+        webSocketEvent = eventInit(epfd, webSocketFd, EPOLLIN, 
+        waitClient_cb, sendClient_cb, WEBSOCKET_LISTENER, domain[i]);
         webSocketEvent->tag = webDealData;
         if(webSocketEvent == NULL)  return -3;
         //添加websocket监听事件
@@ -66,43 +72,38 @@ int main(int argc, char *argv[])
         deviceFd = initListenFd(domain[i], dev_port[i]);
         if(deviceFd == -1)  return -4;
         //将socket绑定到epoll上
-        deviceEvent = initEvent(epfd, deviceFd, EPOLLIN,
-        waitClient_cb, DEVICE_LISTENER, domain[i]);
+        deviceEvent = eventInit(epfd, deviceFd, EPOLLIN,
+        waitClient_cb, sendClient_cb, DEVICE_LISTENER, domain[i]);
         if(deviceEvent == NULL) return -5;
         eventAdd(deviceEvent);
     }
     //从配置文件中读取todolist and devlist
-    travelList(*getToDoListHead(), (manipulate_callback)registerTodo, NULL);
-    travelList(*getSetListHead(), (manipulate_callback)registerSet, NULL);
-    travelList(*getRoomListHead(), (manipulate_callback)registerRoom, NULL);
+    travelList(todolist_head, (manipulate_callback)registerTodo, NULL);
+    travelList(setlist_head, (manipulate_callback)registerSet, NULL);
+    travelList(roomlist_head, (manipulate_callback)registerRoom, NULL);
     setNextAlarm();
 #ifdef DEBUG_DEV
-    travelList(*getDevListHead(), (manipulate_callback)printDev, NULL);
-    travelList(*getToDoListHead(), (manipulate_callback)printTodo, NULL);
-    travelList(*getSetListHead(), (manipulate_callback)printSet, NULL);
-    travelList(*getRoomListHead(), (manipulate_callback)printRoom, NULL);
+    travelList(devlist_head, (manipulate_callback)printDev, NULL);
+    travelList(todolist_head, (manipulate_callback)printTodo, NULL);
+    travelList(setlist_head, (manipulate_callback)printSet, NULL);
+    travelList(roomlist_head, (manipulate_callback)printRoom, NULL);
 #endif //DEBUG_DEV
     return loop(epfd);
 }
 
 void initSignal()
 {
-    struct sigaction int_act, time_act;
-    int_act.sa_flags = 0;
-    time_act.sa_flags = 0;
-    int_act.sa_handler = sigint_cb;
-    time_act.sa_handler = sigtime_cb;
-    sigaction(SIGINT, &int_act, NULL);
-    sigaction(SIGALRM, &time_act, NULL);
+    signal(SIGINT, sigint_cb);
+    signal(SIGALRM, sigtime_cb);
 }
 
 void sigint_cb(int signo)
 {
     writeConf();
-    deleteList(getDevListHead(), (destory_callback)destoryDevConfig);
-    deleteList(getSetListHead(), (destory_callback)destoryTaskSet);
-    deleteList(getToDoListHead(), (destory_callback)destoryTodo);
-    deleteList(getRoomListHead(), (destory_callback)destoryRoom);
+    deleteList(&devlist_head, (destory_callback)destoryDevConfig);
+    deleteList(&setlist_head, (destory_callback)destoryTaskSet);
+    deleteList(&todolist_head, (destory_callback)destoryTodo);
+    deleteList(&roomlist_head, (destory_callback)destoryRoom);
     resetAlarm();
     loopDone(epfd);
     
@@ -113,7 +114,7 @@ void sigtime_cb(int signo)
 {
     travelList(getNextSetList(), (manipulate_callback)runTaskSet, &epfd);
     resetAlarm();
-    travelList(*getToDoListHead(), (manipulate_callback)updateNextAlarm, NULL);
+    travelList(todolist_head, (manipulate_callback)updateNextAlarm, NULL);
     setNextAlarm();
 }
 //尝试fork fail_sleep失败后多少秒后尝试

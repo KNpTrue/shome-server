@@ -3,7 +3,7 @@
 #include "web-config.h"
 #include "web-pack.h"
 #include "sha1-use.h"
-#include "base64.h"
+#include <base64.h>
 #include "../random.h"
 
 #include <string.h>
@@ -87,12 +87,14 @@ uint8_t *data, uint32_t datalen_max, uint32_t *datalen)
     {
     case 126: len = *package++; //读取接下来的16位
               len = (len << 8) + (uint8_t)*package++;
-              if(packagelen < len + 4 + (mask == true ? 4 : 0)) //长度检查
+              //长度检查
+              if(packagelen < len + 4 + (mask == true ? 4 : 0))
                 return OP_ERR;
               break;
     case 127: len = *package++; //读取接下来的64位
               int i = 3; while(i--){len = (len << 8) + *package++;}
-              if(packagelen < len + 10 + (mask == true ? 4 : 0)) //长度检查
+              //长度检查
+              if(packagelen < len + 10 + (mask == true ? 4 : 0))
                 return OP_ERR;
               break;
     }
@@ -154,7 +156,7 @@ uint32_t datalen, uint8_t *package, uint32_t packagelen_max)
     }
     //使用掩码
     uint8_t maskey[4] = {0};
-    getRandomString(maskey, 4); //获得掩码
+    getRandomString(maskey, 4, rand); //获得掩码
     memcpy(package, maskey, 4);
     package += 4; //偏移4个字节指向数据区
     //加密数据

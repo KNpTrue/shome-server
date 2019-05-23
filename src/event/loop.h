@@ -6,7 +6,7 @@
  * 每当监听树监听到有事件发生时, 就会自动调用事件的方法去执行相应的操作, 这个过程时循环发生的
  * 创建事件循环很简单, 按照下面4步进行(参考main.c):
  * 1.你需要先初始化事件循环 loopInit(), 它返回一个epoll监听描述符
- * 2.初始化每一个事件 initEvent(), 传入所有事件必要的信息
+ * 2.初始化每一个事件 eventInit(), 传入所有事件必要的信息
  * 3.将事件添加到事件循环中 eventAdd()
  * 4.开始循环 loop()
  */
@@ -20,7 +20,7 @@
 #include "../list.h"
 /* @def epoll监听描述符数量 */
 #define    EPOLL_MAX_LISTEN    32
-#define    BUF_LEN             2048
+#define    BUF_LEN             4096
 //声明结构体
 typedef struct EventConfig EventConfig_t;
 //回调函数
@@ -34,13 +34,16 @@ struct EventConfig {
     int         fd;  ///<该事件文件描述符
     int         domain; ///<AF_INET or AF_INET6
     uint32_t    event; ///<事件
-    callback_t  callback; ///<回调函数指针
+    callback_t  cur_callback;  ///<当前callback
+    callback_t  read_callback; ///<读callback
+    callback_t  write_callback; ///<写callback
     void        *tag; ///<附加参数
     bool        registered; ///<是否已经在监听树上注册
     uint8_t     who;    ///<发送事件的对象是哪一类的
     char        buf[BUF_LEN];  ///<传输文件的buf
     uint32_t    buflen; ///<buflen
 };
+
 /**
  * @brief 创建事件结构体
  * @param epfd      epoll文件描述符
@@ -48,12 +51,17 @@ struct EventConfig {
  * @param event     epoll事件
  * @param callback 回调函数
  * @param who       发送事件的对象是哪一类的
- * @param domain    AF_INET or AF_INET6
+ * @param domain    AF_INET or AF_INET6 or -1(no socket)
  * @return          事件配置结构体
  * @retval NULL     malloc失败
  */
-EventConfig_t *initEvent(int epfd, int fd, uint32_t event, 
-callback_t callback, uint8_t who, int domain);
+EventConfig_t *eventInit(int epfd, 
+                         int fd, 
+                         uint32_t event, 
+                         callback_t read_callback, 
+                         callback_t write_callback, 
+                         uint8_t who, 
+                         int domain);
 
 /**
  * @brief 初始化循环
@@ -123,6 +131,13 @@ void travelEventList(uint8_t who, manipulate_callback manipulate, void *tag);
  * @param tag       提供给操作函数的额外参数
  */
 void *seachOneEventList(uint8_t who, required_callback required, void *tag);
+
+/**
+ * @brief 提供接口给外部去查找事件链表, 基于list封装
+ * @param who       事件的类型
+ * @param idx       index
+ */
+void *seachOneByIdxEventList(uint8_t who, uint32_t idx);
 
 /**
  * @brief 检查对应类型的eventlist是否为空链表

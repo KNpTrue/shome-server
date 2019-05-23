@@ -2,8 +2,11 @@
 #ifndef _KEY_H
 #define _KEY_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#include "shome-types.h"
+
+//用户必须实现malloc free !!
+extern malloc_cb key_malloc;
+extern free_cb key_free;
 
 #define  KEY_LEN  32
 #define  UNIT_LEN 8
@@ -35,14 +38,13 @@ enum string_type {
 char **getKeyTypesString(uint8_t type);
 //有上下限的key类型
 typedef struct range{
-    double num;
-    double step;
-    int top;
-    int btn;
+    float num;
+    float step;
+    int32_t top;
+    int32_t btn;
 } range_t;
 
 //key
-//#pragma pack(1)
 typedef struct key {
     char        name[KEY_LEN];
     uint8_t     type;
@@ -55,9 +57,9 @@ typedef struct key {
         range_t     range_;
     }           value;
 } _key_t;
-//#pragma pack()
+
 //init
-_key_t *initKey(char *name, uint8_t type, uint8_t mode, char *unit);
+bool initKey(_key_t *key, char *name, uint8_t type, uint8_t mode, char *unit);
 //打印键值
 void printKey(_key_t *key);
 int sprintKeyValue(char *buf, _key_t *key);

@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define    LINE_MAX   256
 //head
@@ -67,10 +68,6 @@ void writeDevId(room_dev_t *room_dev, FILE *fp);
 
 int readConf()
 {
-    node_t **todolist_head = getToDoListHead(),
-           **devlist_head = getDevListHead(),
-           **setlist_head = getSetListHead(),
-           **roomlist_head = getRoomListHead();
     WebConfig_t *webConfig = getWebConfig();
     FILE *fp = initConfFile("r");
     if(fp == NULL)  return -1;
@@ -93,46 +90,46 @@ int readConf()
             break;
         case HEAD_DEV:
             if(strlen(id) != ID_LEN)    goto err1;
-            if(*devlist_head) 
-                if(seachOneByRequired(*devlist_head, (required_callback)isDevId, id))
+            if(devlist_head) 
+                if(seachOneByRequired(devlist_head, (required_callback)isDevId, id))
                     goto err1;
             dev = initDevConfig();
             if(dev == NULL) goto err2;
             strncpy(dev->id, id, ID_LEN);
-            appendTailList(devlist_head, dev);
+            appendTailList(&devlist_head, dev);
             if(findBodyConf(fp, dev, BODY_DEV))    goto err1;
             break;
         case HEAD_SET:
             id_num = atoi(id);
-            if(*setlist_head)
-                if(seachOneByRequired(*setlist_head, (required_callback)isSetId, &id_num))
+            if(setlist_head)
+                if(seachOneByRequired(setlist_head, (required_callback)ext_isId, &id_num))
                     goto err1;
             set = initTaskSet();
             if(set == NULL) goto err2;
-            set->id = id_num;
-            appendTailList(setlist_head, set);
+            set->base.id = id_num;
+            appendTailList(&setlist_head, &set->base);
             if(findBodyConf(fp, set, BODY_SET))    goto err1;
             break;
         case HEAD_TODO:
             id_num = atoi(id);
-            if(*todolist_head)
-                if(seachOneByRequired(*todolist_head, (required_callback)isTodoId, &id_num))
+            if(todolist_head)
+                if(seachOneByRequired(todolist_head, (required_callback)ext_isId, &id_num))
                     goto err1;
             todo = malloc(sizeof(todo_t));
             if(todo == NULL)    goto err2;
-            todo->id = atoi(id);
-            appendTailList(todolist_head, todo);
+            todo->base.id = atoi(id);
+            appendTailList(&todolist_head, todo);
             if(findBodyConf(fp, todo, BODY_TODO))   goto err1;
             break;
         case HEAD_ROOM:
             id_num = atoi(id);
-            if(*roomlist_head)
-                if(seachOneByRequired(*roomlist_head, (required_callback)isRoomId, &id_num))
+            if(roomlist_head)
+                if(seachOneByRequired(roomlist_head, (required_callback)ext_isId, &id_num))
                     goto err1;
             room = initRoom();
             if(room == NULL)    goto err2;
-            room->id = id_num;
-            appendTailList(roomlist_head, room);
+            room->base.id = id_num;
+            appendTailList(&roomlist_head, room);
             if(findBodyConf(fp, room, BODY_ROOM))   goto err1;
             break;
         }
@@ -160,13 +157,13 @@ int writeConf()
     writeWebConf(getWebConfig(), fp);
     if(fp == NULL)  return -1;
     //dev
-    travelList(*getDevListHead(), (manipulate_callback)writeDevConf, fp);
+    travelList(devlist_head, (manipulate_callback)writeDevConf, fp);
     //todo
-    travelList(*getToDoListHead(), (manipulate_callback)writeToDoConf, fp);
+    travelList(todolist_head, (manipulate_callback)writeToDoConf, fp);
     //set
-    travelList(*getSetListHead(), (manipulate_callback)writeSetConf, fp);
+    travelList(setlist_head, (manipulate_callback)writeSetConf, fp);
     //room
-    travelList(*getRoomListHead(), (manipulate_callback)writeRoomConf, fp);
+    travelList(roomlist_head, (manipulate_callback)writeRoomConf, fp);
     fclose(fp);
     return 0;
 }
@@ -224,7 +221,7 @@ int findBodyConf(FILE *fp, void *tag, uint8_t who)
             task_set_t *set = tag;
             if((t = strstr(p, "name")) != NULL)
             {
-                readValue_move(set->name, NAME_LEN, t, 4);
+                readValue_move(set->base.name, NAME_LEN, t, 4);
             }
             else if((t = strstr(p, "task")) != NULL) //task
             {
@@ -244,10 +241,14 @@ int findBodyConf(FILE *fp, void *tag, uint8_t who)
             break;
         case BODY_TASK:;
             task_dev_t *task = tag;
-            if((t = strstr(p, "id")) != NULL)
+            if((t = strstr(p, "idx")) != NULL)
             {
-                memset(task->id, 0, ID_LEN + 1);
-                readValue_move(task->id, ID_LEN, t, 4);
+                task->base.id = readValueNum_move(t, 3);
+            }
+            else if((t = strstr(p, "devid")) != NULL)
+            {
+                memset(task->devid, 0, ID_LEN + 1);
+                readValue_move(task->devid, ID_LEN, t, 5);
             }
             else if((t = strstr(p, "key")) != NULL)
             {
@@ -274,7 +275,7 @@ int findBodyConf(FILE *fp, void *tag, uint8_t who)
             todo->set = NULL;
             if((t = strstr(p, "name")) != NULL)
             {
-                readValue_move(todo->name, NAME_LEN, t, 4);
+                readValue_move(todo->base.name, NAME_LEN, t, 4);
             }
             else if((t = strstr(p, "condition")) != NULL)
             {
@@ -337,7 +338,7 @@ int findBodyConf(FILE *fp, void *tag, uint8_t who)
             room_t *room = tag;
             if((t = strstr(p, "name")) != NULL)
             {
-                readValue_move(room->name, KEY_LEN, t, 4);
+                readValue_move(room->base.name, KEY_LEN, t, 4);
             }
             else if((t = strstr(p, "dev_id")) != NULL)
             {
@@ -450,7 +451,7 @@ void writeToDoConf(todo_t *todo, FILE *fp)
 {   
     char buf[KEY_LEN];
     fprintf(fp, "todo %d\n{\n    name = \"%s\"\n    condition %s\n    {\n", 
-            todo->id, todo->name, condition_type[todo->condition.type]);
+            todo->base.id, todo->base.name, condition_type[todo->condition.type]);
     switch(todo->condition.type)
     {
     case CON_SENSOR:;
@@ -473,7 +474,7 @@ void writeToDoConf(todo_t *todo, FILE *fp)
 
 void writeSetConf(task_set_t *set, FILE *fp)
 {
-    fprintf(fp, "set %d\n{\n    name = \"%s\"\n", set->id, set->name);
+    fprintf(fp, "set %d\n{\n    name = \"%s\"\n", set->base.id, set->base.name);
     travelList(set->task_devList_head, (manipulate_callback)writeTaskConf, fp);
     fprintf(fp, "}\n\n");
 }
@@ -482,15 +483,15 @@ void writeTaskConf(task_dev_t *task, FILE *fp)
 {
     char buf[KEY_LEN];
     sprintKeyValue(buf, &task->key);
-    fprintf(fp, "    task\n    {\n        id = \"%s\"\n        key %s\n        {\n", 
-            task->id, getKeyTypesString(KEY_TYPE)[task->key.type]);
+    fprintf(fp, "    task\n    {\n        idx = \"%d\"\n        devid = \"%s\"\n        key %s\n        {\n", 
+            task->base.id, task->devid, getKeyTypesString(KEY_TYPE)[task->key.type]);
     fprintf(fp, "            name = \"%s\"\n            value = \"%s\"\n        }\n    }\n", 
                 task->key.name, buf);
 }
 
 void writeRoomConf(room_t *room, FILE *fp)
 {
-    fprintf(fp, "room %d\n{\n    name = \"%s\"\n", room->id, room->name);
+    fprintf(fp, "room %d\n{\n    name = \"%s\"\n", room->base.id, room->base.name);
     travelList(room->roomDevList_head, (manipulate_callback)writeDevId, fp);
     fprintf(fp, "}\n\n");
 }

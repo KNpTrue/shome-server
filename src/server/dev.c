@@ -4,26 +4,47 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "event-socket.h"
 
 //todo-list
-static node_t *todolist_head = NULL;
+node_t *todolist_head = NULL;
 //all devices include conf and connect
-static node_t *devlist_head = NULL;
+node_t *devlist_head = NULL;
 //set-list
-static node_t *setlist_head = NULL;
+node_t *setlist_head = NULL;
 //room-list
-static node_t *roomlist_head = NULL;
+node_t *roomlist_head = NULL;
 //
 void setNull_cb(void *data, uint8_t *type);
 
-//common
-uint8_t getNewId(node_t *head, getMaxId_callback getMaxId)
+/**
+ * 每次都返回最大的ID
+*/
+void getMaxId(ext_base_t *ext, uint8_t *max)
+{
+    if(!ext)   return;
+    if(ext->id > *max)   *max = ext->id;
+}
+
+uint8_t ext_getNewId(node_t *head)
 {
     int max = 0;
     travelList(head, (manipulate_callback)getMaxId, &max);
     return max + 1;
+}
+
+void ext_sortId_cb(ext_base_t *ext, uint8_t *tmp)
+{
+    ext->id = *tmp + 1;
+    (*tmp)++;
+}
+
+
+bool ext_isId(ext_base_t *ext, const id_t *id)
+{
+    return ext->id == *id;
 }
 
 //dev
@@ -43,8 +64,7 @@ DevConfig_t *initDevConfig()
 
 bool isDevId(DevConfig_t *devConfig, const char *id)
 {
-    if(!strncmp(devConfig->id, id, ID_LEN))   return true;
-    else  return false;
+    return strncmp(devConfig->id, id, ID_LEN) == 0;
 }
 
 void destoryDevConfig(DevConfig_t *devConfig)
@@ -92,7 +112,7 @@ void registerTodo(todo_t *todo)
 {
     if(todo->set)   return;
     task_set_t *set = seachOneByRequired(setlist_head, 
-            (required_callback)isSetId, &todo->set_id);
+            (required_callback)ext_isId, &todo->set_id);
     todo->set = set;
     if(set) appendList(&set->regTodoList_head, todo);
     if(todo->condition.type == CON_SENSOR)
@@ -112,19 +132,14 @@ void destoryTodo(todo_t *todo)
     if(!todo)   return;
     if(todo->set && todo->set->regTodoList_head)
         deleteNode(&todo->set->regTodoList_head, 
-                (required_callback)isTodoId, &todo->id, NULL);
+                (required_callback)ext_isId, &todo->base.id, NULL);
     if(todo->condition.type == CON_SENSOR)
     {
         DevConfig_t *dev = (DevConfig_t *)todo->condition.detail.con_sensor.devConfig;
         if(dev && dev->todolist_head)
-            deleteNode((node_t **)&dev->todolist_head, (required_callback)isTodoId, &todo->id, NULL);
+            deleteNode((node_t **)&dev->todolist_head, (required_callback)ext_isId, &todo->base.id, NULL);
     }
     free(todo);
-}
-
-bool isTodoId(todo_t *todo, const uint8_t *id)
-{
-    return todo->id == *id;
 }
 
 bool isMeetCon_sensor(todo_t *todo, DevConfig_t *devConfig)
@@ -160,7 +175,7 @@ task_set_t *initTaskSet()
     set->task_devList_head = NULL;
     set->regTodoList_head = NULL;
     return set;
-}
+}       
 
 void destoryTaskSet(task_set_t *set)
 {
@@ -179,7 +194,7 @@ void registerSet(task_set_t *set)
 
 bool isSetId(task_set_t *set, const uint8_t *id)
 {
-    return set->id == *id;
+    return set->base.id == *id;
 }
 
 void runTaskSet(task_set_t *set)
@@ -202,7 +217,7 @@ void registerTaskDev(task_dev_t *task)
 {
     if(task->devConfig) return;
     DevConfig_t *dev = seachOneByRequired(devlist_head, 
-                    (required_callback)isDevId, task->id);
+                    (required_callback)isDevId, task->devid);
     task->devConfig = dev;
     if(dev) appendList((node_t **)&dev->tasklist_head, task);
 }
@@ -212,14 +227,8 @@ void destoryTaskDev(task_dev_t *task)
     if(!task)   return;
     DevConfig_t *dev = (DevConfig_t *)task->devConfig;
     if(dev)
-        deleteNode((node_t **)&dev->tasklist_head, (required_callback)isTaskDevId, &task->id, NULL);
+        deleteNode((node_t **)&dev->tasklist_head, (required_callback)ext_isId, &task->base.id, NULL);
     free(task);
-}
-
-bool isTaskDevId(task_dev_t *task, const char *id)
-{
-    if(!strncmp(task->id, id, ID_LEN))   return true;
-    else  return false;
 }
 
 void runTaskDev(task_dev_t *task)
@@ -230,8 +239,8 @@ void runTaskDev(task_dev_t *task)
     memset(evt->buf, 0, BUF_LEN);
     char buf[BUF_LEN];
     uint32_t len = dev_makeData(buf, &task->key);
-    evt->buflen = dev_enPackage(buf, len, evt->buf, BUF_LEN);
-    _switchEventMode(evt, EPOLLOUT, sendClient_cb);
+    evt->buflen = dev_enPackage(buf, len, evt->buf, BUF_LEN, rand);
+    _switchEventMode(evt, EPOLLOUT);
 }
 
 void updateTaskDev(task_dev_t *task, node_t *keylist_head)
@@ -252,10 +261,6 @@ room_t *initRoom()
     return room;
 }
 
-bool isRoomId(room_t *room, const uint8_t *id)
-{
-    return room->id == *id;
-}
 void registerRoom(room_t *room)
 {
     if(!room->roomDevList_head) return;
@@ -267,15 +272,10 @@ void destoryRoom(room_t *room)
         deleteList(&room->roomDevList_head, (destory_callback)destoryRoomDev);
     free(room);
 }
-void getRoomMaxId(room_t *room, uint8_t *max)
-{
-    if(!room)   return;
-    if(room->id > *max)   *max = room->id;
-}
 
 void sortRoomId(room_t *room, uint8_t *tmp)
 {
-    room->id = *tmp + 1;
+    room->base.id = *tmp + 1;
     (*tmp)++;
 }
 
@@ -306,26 +306,6 @@ bool isRoomDevId(room_dev_t *room_dev, const char *id)
 {
     if(!strncmp(room_dev->id, id, ID_LEN))   return true;
     else  return false;
-}
-
-node_t **getToDoListHead()
-{
-    return &todolist_head;
-}
-
-node_t **getDevListHead()
-{
-    return &devlist_head;
-}
-
-node_t **getSetListHead()
-{
-    return &setlist_head;
-}
-
-node_t **getRoomListHead()
-{
-    return &roomlist_head;
 }
 
 //days
@@ -366,7 +346,7 @@ void printDev(DevConfig_t *dev)
 
 void printTodo(todo_t *todo)
 {
-    printf("<todo>\tid:%d \tname:%s \tset_id:%d \t", todo->id, todo->name, todo->set_id);
+    printf("<todo>\tid:%d \tname:%s \tset_id:%d \t", todo->base.id, todo->base.name, todo->set_id);
     switch(todo->condition.type)
     {
     case CON_SENSOR:
@@ -383,19 +363,19 @@ void printTodo(todo_t *todo)
 
 void printSet(task_set_t *set)
 {
-    printf("<set>\tid:%d \tname:%s", set->id, set->name);
+    printf("<set>\tid:%d \tname:%s", set->base.id, set->base.name);
     travelList(set->task_devList_head, (manipulate_callback)printTask, NULL);
 }
 
 void printTask(task_dev_t *task)
 {
-    printf("\t<task>id:%s \t", task->id);
+    printf("\t<task>id:%d devid:%s\t", task->base.id, task->devid);
     printKey(&task->key);
 }
 
 void printRoom(room_t *room)
 {
-    printf("<room>\tid:%d \tname:%s", room->id, room->name);
+    printf("<room>\tid:%d \tname:%s", room->base.id, room->base.name);
     travelList(room->roomDevList_head, (manipulate_callback)printRoomDev, NULL);
     putchar('\n');
 }

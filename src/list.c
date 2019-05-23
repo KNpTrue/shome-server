@@ -1,10 +1,13 @@
 //list.c
 #include "list.h"
-#include <stdio.h>
+
+//需要用户自己给定函数
+malloc_cb list_malloc;
+free_cb list_free;
 
 bool appendList(node_t **head, void *data)
 {
-    node_t *newNode = (node_t *)malloc(sizeof(node_t));
+    node_t *newNode = (node_t *)list_malloc(sizeof(node_t));
     if(newNode == NULL)     return false;
     newNode->data = data;
     //头部插入
@@ -16,7 +19,7 @@ bool appendList(node_t **head, void *data)
 bool appendTailList(node_t **head, void *data)
 {
     if(!data)   return false;
-    node_t *newNode = (node_t *)malloc(sizeof(node_t));
+    node_t *newNode = (node_t *)list_malloc(sizeof(node_t));
     if(newNode == NULL)     return false;
     newNode->data = data;
     newNode->next = NULL;
@@ -56,6 +59,18 @@ node_t *seachByRequired(node_t *head, required_callback required, void *tag)
     return newList;
 }
 
+void *seachOneByIdx(node_t *head, unsigned int idx)
+{
+    while(idx > 0 && head != NULL)
+    {
+        idx--;
+        head = head->next;
+    }
+    if(head)
+        return head->data;
+    return NULL;
+}
+
 void travelList(node_t *head, manipulate_callback manipulate, void *tag)
 {
     while(head != NULL)
@@ -76,7 +91,7 @@ bool deleteNode(node_t **head, required_callback required, void *tag, destory_ca
             cur = *t;
             *t = (*t)->next;
             if(destory) destory(cur->data);
-            free(cur);
+            list_free(cur);
             return true;
         }
         t = &(*t)->next;
@@ -92,7 +107,7 @@ void deleteList(node_t **head, destory_callback destory)
         cur = t;
         t = t->next;
         if(destory) destory(cur->data);
-        free(cur);
+        list_free(cur);
     }
     *head = NULL;
 }

@@ -39,6 +39,9 @@ static char *key_symols[] = {
                 return (srckey)->value.type < (reqkey)->value.type;\
             }})\
 
+//float to double
+void f2d( float f , void *x );
+
 char **getKeyTypesString(uint8_t type)
 {
     switch(type)
@@ -50,20 +53,19 @@ char **getKeyTypesString(uint8_t type)
     return NULL;
 }
 
-_key_t *initKey(char *name, uint8_t type, uint8_t mode, char *unit)
+bool initKey(_key_t *key, char *name, uint8_t type, uint8_t mode, char *unit)
 {
-    _key_t *key = malloc(sizeof(_key_t));
-    if(key == NULL) return NULL;
+    if(key == NULL || name == NULL) return false;
     memset(key, 0, sizeof(_key_t));
-    if(name)   strncpy(key->name, name, KEY_LEN);
+    strncpy(key->name, name, KEY_LEN);
     key->type = type;
     if(type == KEY_RANGE)
     key->value.range_.step = 1;
     key->value.range_.btn = 0;
     key->value.range_.top = 100;
     key->mode = mode;
-    if(unit)   strncpy(key->unit, unit, UNIT_LEN);
-    return key;
+    if(unit)    strncpy(key->unit, unit, UNIT_LEN);
+    return true;
 }
 
 int sprintKeyValue(char *buf, _key_t *key)
@@ -83,7 +85,7 @@ int sprintKeyValue(char *buf, _key_t *key)
 }
 void printKey(_key_t *key)
 {
-    char buf[KEY_LEN];
+    char buf[KEY_LEN * 2];
     sprintKeyValue(buf, key);
     printf("%s:%s%s\n", key->name, buf, key->unit);
 }
@@ -92,7 +94,6 @@ void setKeyValue(_key_t *key, const void *buf)
 {
     memcpy(&key->value, buf, getValueSize(key->type));
 }
-
 
 void setKeyValue_move(_key_t *key, const void **buf)
 {
@@ -106,6 +107,7 @@ bool setKeyValue_move_safe(_key_t *key, struct safa_data *data)
 {
     if(!key || !data)   return false;
     uint32_t size = getValueSize(key->type);
+    if(data->buflen < size) return false;
     if(data->buflen < size)    return false;
     memcpy(&key->value, data->buf, size);
     data->buflen -= size;
@@ -117,7 +119,13 @@ uint32_t valueToBuf(_key_t *key, void **buf)
 {
     if(!key || !buf)    return 0;
     uint32_t size = getValueSize(key->type);
-    memcpy(*buf, &key->value, size);
+    if(sizeof(double) == 4 && key->type == KEY_NUMBER)
+    {
+        char dnum[sizeof(double) * 2];
+        f2d(key->value.number_, (void *)dnum);
+        memcpy(*buf, dnum, size);
+    }
+    else memcpy(*buf, &key->value, size);
     *buf += size;
     return size;
 }
@@ -169,6 +177,10 @@ uint32_t getValueSize(uint8_t type)
 {
     uint8_t value_size[] = {sizeof(double), KEY_LEN, 
                             sizeof(bool), sizeof(range_t)};
+    if(sizeof(double) == 4) //保证数据统一
+    {
+        value_size[0] = sizeof(double) * 2;
+    }
     uint8_t i;
     for(i = 0; i < ARR_NUM(value_size); i++)
     {
@@ -183,4 +195,21 @@ void copyKeyHead_move(_key_t *key, void **buf)
     uint32_t len = offset_t(_key_t, unit) + UNIT_LEN;
     memcpy(*buf, key, len);
     *buf += len;
+}
+
+void f2d( float f , void *x )
+{
+    unsigned long a , b;
+    unsigned long uf = *(unsigned long*)&f;
+    unsigned long*ux = (unsigned long*)x;
+     
+    ux[0] = ux[1] = 0;
+    ux[1] |= uf&0x80000000;
+     
+    a = (uf&0x7f800000)>>23;
+    b = uf&0x7fffff;
+    a += 1024 - 128;
+    ux[1] |= a<<20;
+    ux[1] |= b>>3 ;
+    ux[0] |= b<<29;   
 }

@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "dev-detail.h"
+#include "dev-ext.h"
 #include "../dev-type.h"
 
 //设备属性
@@ -31,24 +31,32 @@ typedef struct DevConfig {
     void        *todolist_head;
     void        *tasklist_head;
     room_t      *room;          //所在的房间
-    
-#if 0
-    union {
-        sm_switch_t sm_switch;
-        sm_sensor_t sm_sensor;
-        sm_video_t  sm_video;
-    }           detail; //详情由type决定
-#endif
 } DevConfig_t;
 
 //获得链表头指针的地址
-node_t **getToDoListHead();
-node_t **getDevListHead();
-node_t **getSetListHead();
-node_t **getRoomListHead();
-//common
-typedef void (*getMaxId_callback)(void *dag, uint8_t max);
-uint8_t getNewId(node_t *head, getMaxId_callback getMaxId);
+extern node_t *devlist_head;
+extern node_t *todolist_head;
+extern node_t *setlist_head;
+extern node_t *roomlist_head;
+
+/**
+ * ext_base子类获取一个新的Id
+ * @head ext_base子类的链表
+ * @return new id
+*/
+uint8_t ext_getNewId(node_t *head);
+
+/**
+ * @brief 对Id进行重新排序 回调函数
+ * @param ext ext_base结构地址
+ * @param tmp 传入的ID, 每次会叠加
+ * @example uint32_t tmp; travelList(list_head, (manipulate_callback)ext_sortId_cb, &tmp);
+*/
+void ext_sortId_cb(ext_base_t *ext, uint8_t *tmp);
+/**
+ * @brief 比较ID
+*/
+bool ext_isId(ext_base_t *ext, const id_t *id);
 
 //dev
 DevConfig_t *initDevConfig();
@@ -57,29 +65,23 @@ void destoryDevConfig(DevConfig_t *devConfig);
 //todo
 void registerTodo(todo_t *todo);
 void destoryTodo(todo_t *todo);
-bool isTodoId(todo_t *todo, const uint8_t *id);
 bool isMeetCon_sensor(todo_t *todo, DevConfig_t *devConfig);
 void runTodo(todo_t *todo);
 //task-set 任务集
 task_set_t *initTaskSet();
 void destoryTaskSet(task_set_t *set);
 void registerSet(task_set_t *set);
-bool isSetId(task_set_t *set, const uint8_t *id);
 void runTaskSet(task_set_t *set);
 //task-dev
 task_dev_t *initTaskDev();
 void registerTaskDev(task_dev_t *task);
 void destoryTaskDev(task_dev_t *task);
-bool isTaskDevId(task_dev_t *task, const char *id);
 void runTaskDev(task_dev_t *task);
 void updateTaskDev(task_dev_t *task, node_t *keylist_head);
 //room
 room_t *initRoom();
-bool isRoomId(room_t *room, const uint8_t *id);
 void registerRoom(room_t *room);
 void destoryRoom(room_t *room);
-void getRoomMaxId(room_t *room, uint8_t *max);
-void sortRoomId(room_t *roomm, uint8_t *tmp);
 //room_dev
 room_dev_t *initRoomDev();
 void destoryRoomDev(room_dev_t *room_dev);

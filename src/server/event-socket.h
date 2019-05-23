@@ -4,16 +4,14 @@
 
 #include <arpa/inet.h>
 
-#include <stdbool.h>
 #include "../event/loop.h"
 #include "web-protocol.h"
 #include "dev-protocol.h"
 
 #define  MAX_LISTEN  16
 
-#define _switchEventMode(_struct, _event, _callback) \
+#define _switchEventMode(_struct, _event) \
         ({(_struct)->event = (_event);\
-        (_struct)->callback = (_callback);\
         eventMod(_struct);})
 
 /**

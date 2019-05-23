@@ -1,17 +1,25 @@
 /**
- * dev-protocol.h
+ * @file dev-protocol.h
+ * 
  * 握手协议
- * |----4-----|----3-----|---8---|---4---|---1---|-KEY_LEN-|---1---|---1---|-UNIT_LEN-|
- *    MASK      dev_magic   id     type    keyNum  keyname  keytype keymode  keyunit
+ * 固定：
+ * |---3---|-ID_LEN-|-sizeof(dev_type_t)-|---1---|
+ * dev_magic   id          type           keyNum 
+ * 不固定(长度由keyNum决定)：
+ * |-KEY_LEN-|---1---|---1---|-UNIT_LEN-|...
+ *   keyname  keytype keymode  keyunit   ...
  * 
- * update
- * DATA
- * |---1---|--sizeof(keytype)--|...
- *  keyNum        keyvalue  ...
+ * update Data
+ * |---1---|---1---|--sizeof(keytype)--|...
+ *    0x12   keyNum        keyvalue  ...
  * 
- * makeData
- * |--KEY_LEN--|--size for keyType--|
- *    keyName          keyValue
+ * set Data
+ * |---1---|--KEY_LEN--|--size for keyType--|
+ *   0x41     keyName          keyValue
+ * 
+ * reset
+ * |---1---|
+ *   0x33
 */
 #ifndef _DEVSOCKET_H
 #define _DEVSOCKET_H
@@ -23,6 +31,11 @@
 #include "../dev-encrypt.h"
 
 #define DEV_MAGIC "DEV"
+
+//protocol head code
+#define DEV_PRO_UPDATE  0x12
+#define DEV_PRO_SET     0x41
+#define DEV_PRO_RST     0x33
 
 //初始化设备
 DevConfig_t *dev_handShake(const char *buf, uint32_t buflen);

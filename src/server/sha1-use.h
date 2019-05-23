@@ -4,7 +4,7 @@
  * 该头文件使用了sha1库进行编码
  * 编码字符串为标准字符串
  */
-#include "sha1.h"
+#include <sha1.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>

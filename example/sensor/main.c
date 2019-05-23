@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "../common.h"
 
@@ -17,6 +18,10 @@ void updateKeyList(node_t *keylist_head);
 
 int main()
 {
+    //list_init
+    list_malloc = malloc;
+    list_free = free;
+
     char ip[30];
     if(getGateWay(AF_INET, ip))
         printf("default gateway:%s\n", ip);
@@ -46,7 +51,7 @@ int main()
         memset(buf2,  0, BUF_LEN);
         p = buf2;
         travelList(keylist_head, (manipulate_callback)valueToBuf, &p);
-        len = dev_enPackage(buf2, p - buf2, buf, BUF_LEN);
+        len = dev_enPackage(buf2, p - buf2, buf, BUF_LEN, rand);
         if(len == 0)   goto err;
         if(Write(fd, buf, len) <= 0)    goto err;
         sleep(1);

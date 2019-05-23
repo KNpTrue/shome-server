@@ -15,6 +15,8 @@ enum dev_type {
     SM_LIGHT,   //灯
     SM_TEMPL,   //温湿度传感器
     SM_AIR_CON, //空调
+    SM_ENVIRONSENSOR, //环境传感器
+    SM_HUMANSENSOR, //人体传感器
 };
 
 #endif //_DEV_TYPE_H

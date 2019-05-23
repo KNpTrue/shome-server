@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <stdlib.h>
 
 static struct next_alarm {
     time_t     alarm; // 距离下一次闹钟的时间

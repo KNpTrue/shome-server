@@ -1,5 +1,6 @@
 //common.c
 #include "common.h"
+#include "../src/log.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -20,9 +21,7 @@ char *getGateWay(int domain, char *gateway)
 {
     if(domain != AF_INET && domain != AF_INET6)
     {
-#ifdef DEBUG_DEV
-        fprintf(stderr, "<getGateWay>domain error.\n");
-#endif //DEBUG_DEV
+        loge("<getGateWay>domain error.\n");
         return NULL;
     }
     FILE *fp;
@@ -62,17 +61,13 @@ int connServFd(int domain, const char *addr, short port)
 {
     if(domain != AF_INET && domain != AF_INET6)
     {
-#ifdef DEBUG_DEV
-        fprintf(stderr, "<connServFd>domain error.\n");
-#endif //DEBUG_DEV
+        loge("<connServFd>domain error.\n");
         return -1;
     }
     int fd = socket(domain, SOCK_STREAM, 0);
     if(fd == -1)
     {
-#ifdef DEBUG_DEV
-        perror("<connServFd>socket err");
-#endif //DEBUG_DEV
+        logp("<connServFd>socket err");
     }
     union sockaddr_types serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -90,21 +85,17 @@ int connServFd(int domain, const char *addr, short port)
     }
     if(connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)))
     {
-#ifdef DEBUG_DEV
-        perror("<connServFd>connect err");
-#endif //DEBUG_DEV
+        logp("<connServFd>connect err");
         return -1;
     }
-#ifdef DEBUG_DEV
-    printf("connect success\n");
-#endif //DEBUG_DEV
+    logd("connect success\n");
     return fd;
 }
 
-int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head)
+uint32_t handShake_send(char *buf, uint32_t buflen, uint8_t id[ID_LEN], 
+                dev_type_t type, node_t *keylist_head)
 {
     //握手
-    char buf[BUF_LEN], buf2[BUF_LEN];
     memset(buf, 0, BUF_LEN);
     strcpy(buf, "DEV");
     char *p = buf + strlen("DEV");
@@ -121,7 +112,20 @@ int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head)
     *p++ = getNodeCount(keylist_head);
     travelList(keylist_head, (manipulate_callback)copyKeyHead_move, &p);
     //打包加密
-    uint32_t len = dev_enPackage(buf, p - buf, buf2, BUF_LEN);
+    return p - buf;
+}
+
+int handShake_recv(const char *buf)
+{
+    return strncmp(buf, DEV_MAGIC, sizeof(DEV_MAGIC)) == 0;
+}
+
+int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head)
+{
+    char buf[BUF_LEN], buf2[BUF_LEN];
+    uint32_t len = handShake_send(buf, BUF_LEN, id, type, keylist_head);
+    if(len == 0)    return -1;
+    len = dev_enPackage(buf, len, buf2, BUF_LEN, rand);
     if(len == 0)    return -1;
     int ret = Write(fd, buf2, len);
     if(ret <= 0)    return -1;
@@ -129,14 +133,22 @@ int handShake(int fd, uint8_t id[ID_LEN], dev_type_t type, node_t *keylist_head)
     if(ret <= 0)    return -1;
     len = dev_dePackage(buf, ret, buf2, BUF_LEN);
     if(len == 0)    return -1;
-    if(strncmp(buf2, DEV_MAGIC, len)) return -1;
-    p = buf;
-    travelList(keylist_head, (manipulate_callback)valueToBuf, &p);
-    len = dev_enPackage(buf, p - buf, buf2, BUF_LEN);
+    if(handShake_recv(buf2))    return -1;
+    len = dev_update(buf, keylist_head);
+    if(len == 0)    return -1;
+    len = dev_enPackage(buf, len, buf2, BUF_LEN, rand);
     if(len == 0)    return -1;
     ret = Write(fd, buf2, len);
     if(ret <= 0)    return -1;
     return 0;
+}
+
+uint32_t dev_update(char *buf, node_t *keylist_head)
+{
+    char *p = buf;
+    *p++ = DEV_PRO_UPDATE;
+    travelList(keylist_head, (manipulate_callback)valueToBuf, &p);
+    return p - buf;
 }
 
 node_t *initKeyList(char *keyName[], uint8_t *keyType, uint8_t *keyMode, char *keyUnit[])
@@ -145,8 +157,15 @@ node_t *initKeyList(char *keyName[], uint8_t *keyType, uint8_t *keyMode, char *k
     int i;
     for(i = 0; keyName[i]; i++)
     {
-        if(!appendTailList(&head, initKey(keyName[i], keyType[i], keyMode[i], keyUnit[i])))
-            deleteList(&head, free);
+        _key_t *key = malloc(sizeof(_key_t));
+        if (key == NULL)    goto err;
+        if(!initKey(key, keyName[i], keyType[i], keyMode[i], keyUnit[i]))
+            goto err;
+        if(!appendTailList(&head, key))
+            goto err;
     }
     return head;
+err:
+    deleteList(&head, free);
+    return NULL;
 }

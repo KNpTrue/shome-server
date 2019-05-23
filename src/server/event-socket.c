@@ -4,6 +4,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <linux/tcp.h>
+
 
 #include "event-socket.h"
 #include "event-who.h"
@@ -22,11 +25,13 @@ int _recvWebClient_cb(EventConfig_t *connEvent);
 //dev
 int _recvDevClient_cb(EventConfig_t *connEvent);
 
+int socket_KeepAlive(int fd, int interval);
+
 int initListenFd(int domain, short port)
 {
     if(domain != AF_INET && domain != AF_INET6)
     {
-        loge(stderr, "<initListenFd>domain error.\n");
+        loge("<initListenFd>domain error.\n");
         return -1;
     }
     int listenfd = socket(domain, SOCK_STREAM, 0);
@@ -105,22 +110,23 @@ int waitClient_cb(EventConfig_t *listenEvent)
     //设置成非阻塞
     int flag = fcntl(connfd, F_GETFL);
     fcntl(connfd, F_SETFL, flag | O_NONBLOCK);
+    socket_KeepAlive(connfd, 9);
     EventConfig_t *connEvent;
     //判断是谁的事件并初始化事件
     switch(listenEvent->who)
     {
     case WEBSOCKET_LISTENER: //websocket
-        connEvent = initEvent(listenEvent->epfd, connfd, EPOLLIN, recvClient_cb, 
-        WEBSOCKET_CONNECTOR | WEBSOCKET_FIRSTCONN, listenEvent->domain);
+        connEvent = eventInit(listenEvent->epfd, connfd, EPOLLIN, recvClient_cb, sendClient_cb,
+                            WEBSOCKET_CONNECTOR | WEBSOCKET_FIRSTCONN, listenEvent->domain);
         connEvent->tag = listenEvent->tag;
         break;
     case DEVICE_LISTENER: //device
-        connEvent = initEvent(listenEvent->epfd, connfd, EPOLLIN, recvClient_cb, 
-        DEVICE_CONNECTOR | DEVICE_FIRSTCONN, listenEvent->domain);
+        connEvent = eventInit(listenEvent->epfd, connfd, EPOLLIN, recvClient_cb, sendClient_cb, 
+                            DEVICE_CONNECTOR | DEVICE_FIRSTCONN, listenEvent->domain);
     }
     if(connEvent == NULL) //如果失败
     {
-        loge(stderr, "<waitWebClient_cb>initAccept err, close connfd.\n");
+        loge("<waitWebClient_cb>initAccept err, close connfd.\n");
         close(connfd);
         return 0;
     }
@@ -145,7 +151,7 @@ int sendClient_cb(EventConfig_t *connEvent)
     logd("%s\nbuflen: %d\nsend: ", buf, connEvent->buflen);
     Write(connEvent->fd, buf, connEvent->buflen); //回写客户端
     //将事件切换成读事件
-    _switchEventMode(connEvent, EPOLLIN, recvClient_cb);
+    _switchEventMode(connEvent, EPOLLIN);
     return 0;
 }
 
@@ -159,7 +165,7 @@ int _recvWebClient_cb(EventConfig_t *connEvent)
     rcount = Read_unblock(connfd, buf, BUF_LEN);
     if(rcount == -1)    goto err;
     buf[rcount] = '\0';  //保证数据正确
-#ifdef DEBUG_EVENT
+#ifdef DEBUG
     printf("%s\n", buf);
     int i;
     for(i = 0; i < connEvent->buflen; i++)
@@ -167,28 +173,29 @@ int _recvWebClient_cb(EventConfig_t *connEvent)
         printf("%02X", (unsigned char)connEvent->buf[i]);
     }
     printf("\n");
-#endif //DEBUG_EVENT
+#endif //DEBUG
     if(connEvent->who & WEBSOCKET_FIRSTCONN) //第一次连接客户端, 需要先握手
     {
         connEvent->who &= ~WEBSOCKET_FIRSTCONN; //将第一次握手标志去掉
         //key
         char srckey[WEBSOCKET_KEY_LEN];
         const char *key_flag[] = {"Sec-WebSocket-Key: ", "Sec-WebSocket-Protocol: "};
-        if(!getWebSocketValue(buf, srckey, WEBSOCKET_KEY_LEN, key_flag[0]))
+        //从HTTP头中找到websocket-key
+        if(!getWebSocketValue(buf, srckey, WEBSOCKET_KEY_LEN, key_flag[0])) 
         {
-            loge(stderr, "<recvWebClient_cb>getWebSocketValue: Can't get websocket-key, close connect.\n");
+            loge("<recvWebClient_cb>getWebSocketValue: Can't get websocket-key, close connect.\n");
             goto err;
         }
         char subkey[WEBSOCKET_KEY_LEN];
         if(!getWebSocketValue(buf, subkey, WEBSOCKET_KEY_LEN, key_flag[1]))
         {
-            loge(stderr, "<recvWebClient_cb>getWebSocketValue: Can't get websocket-protocol, close connect.\n");
+            loge("<recvWebClient_cb>getWebSocketValue: Can't get websocket-protocol, close connect.\n");
             goto err;
         }
         //认证
         if(!isSubKeyRight(subkey)) //认证错误
         {
-            loge(stderr, "<recvWebClient_cb>isSubKeyRight: sub-Key error, close connect.\n");
+            loge("<recvWebClient_cb>isSubKeyRight: sub-Key error, close connect.\n");
             goto err;
         }
         //编码websocket-key
@@ -233,7 +240,7 @@ int _recvWebClient_cb(EventConfig_t *connEvent)
         }
     }
     //将事件切换成写事件
-    isSwitchWrite && _switchEventMode(connEvent, EPOLLOUT, sendClient_cb);
+    isSwitchWrite && _switchEventMode(connEvent, EPOLLOUT);
     return 0;
 err:
     //关闭描述符，并从树上摘下
@@ -247,6 +254,7 @@ int _recvDevClient_cb(EventConfig_t *connEvent)
     int connfd = connEvent->fd;
     char *buf = connEvent->buf;
     int rcount;
+    DevConfig_t *devConfig;
     //读数据
     rcount = Read_unblock(connfd, buf, BUF_LEN);
     if(rcount == -1)    goto err;
@@ -254,24 +262,48 @@ int _recvDevClient_cb(EventConfig_t *connEvent)
     char buf2[BUF_LEN];
     uint32_t len;
     len = dev_dePackage(buf, rcount, buf2, BUF_LEN);
+#ifdef DEBUG
+    logd("<_recvDevClient_cb>buflen: %d\n", len);
+    for(int i = 0; i < len; i++)
+    {
+        logd("%02X ", (unsigned char)buf2[i]);
+    }
+    logd("\n");
+#endif //DEBUG
     if(connEvent->who & DEVICE_FIRSTCONN) //first
     {
-        connEvent->who &= ~DEVICE_FIRSTCONN; //将第一次的标志位去除
         //检测设备
-        DevConfig_t *devConfig = dev_handShake(buf2, len);
+        if(*buf2 == DEV_PRO_UPDATE) //掉线重连时设备端不知道，需要告诉设备端重置
+        {
+            char tmp = DEV_PRO_RST;
+            connEvent->buflen = dev_enPackage(&tmp, sizeof(tmp), buf, BUF_LEN, rand);
+            goto done;
+        }
+        connEvent->who &= ~DEVICE_FIRSTCONN; //将第一次的标志位去除
+        //握手
+        devConfig = dev_handShake(buf2, len);
         if(devConfig == NULL)   goto err;
         devConfig->ep_event = connEvent;
         connEvent->tag = (void *)devConfig;
         strcpy(buf2, DEV_MAGIC);
-        len = dev_enPackage(buf2, strlen(DEV_MAGIC), buf, BUF_LEN);
-        connEvent->buflen = len;
+        connEvent->buflen = dev_enPackage(buf2, strlen(DEV_MAGIC), buf, BUF_LEN, rand);
     }
     else //处理数据
     {
+        devConfig = (DevConfig_t *)connEvent->tag;
+        if(dev_getData(buf2, len, connEvent->tag))
+        {
+            if(buf2[0] == DEV_MAGIC[0] && buf2[1] == DEV_MAGIC[1] && buf2[2] == DEV_MAGIC[2])
+            {
+                strcpy(buf2, DEV_MAGIC);
+                len = dev_enPackage(buf2, strlen(DEV_MAGIC), buf, BUF_LEN, rand);
+                connEvent->buflen = len;
+                goto done;
+            }
+            loge("error.\n");
+            goto err;
+        }
         isSwitchWrite = false;
-        if(dev_getData(buf2, len, connEvent->tag))  goto err;
-        //如果是sensor检查是否触发事件
-        DevConfig_t *devConfig = (DevConfig_t *)connEvent->tag;
         //将数据传送给web端
         sendDataToWeb(PACK_DEV, devConfig);
         node_t *keylist_head = devConfig->keyList_head;
@@ -286,20 +318,22 @@ int _recvDevClient_cb(EventConfig_t *connEvent)
             deleteList(&todolist_head, NULL);
         }
         if(devConfig->tasklist_head) //更新列表
-            travelList(devConfig->tasklist_head, (manipulate_callback)updateTaskDev, keylist_head);
+            travelList(devConfig->tasklist_head, 
+                    (manipulate_callback)updateTaskDev, keylist_head);
         //打印
-#ifdef DEBUG_EVENT
+#ifdef DEBUG
         travelList(keylist_head, (manipulate_callback)printKey, NULL);
-#endif //DEBUG_EVENT
+#endif //DEBUG
     }
+done:
     //将事件切换成写事件
-    isSwitchWrite && _switchEventMode(connEvent, EPOLLOUT, sendClient_cb);
+    isSwitchWrite && _switchEventMode(connEvent, EPOLLOUT);
     return 0;
 err:
     //关闭描述符，并从树上摘下
     if(connEvent->tag)
     {
-        DevConfig_t *devConfig = (DevConfig_t *)connEvent->tag;
+        devConfig = (DevConfig_t *)connEvent->tag;
         devConfig->isOnline = false;
         devConfig->ep_event = NULL;
         deleteList(&devConfig->keyList_head, free);
@@ -314,7 +348,7 @@ void _sendDataToWeb(EventConfig_t *evt, const char *data)
 {
     evt->buflen = enPackage(OP_TXTDATA, false, (uint8_t *)data, 
             strlen(data), (uint8_t *)evt->buf, BUF_LEN);
-    _switchEventMode(evt, EPOLLOUT, sendClient_cb);
+    _switchEventMode(evt, EPOLLOUT);
 }
 
 void sendDataToWeb(uint8_t type, void *tag)
@@ -328,3 +362,33 @@ void sendDataToWeb(uint8_t type, void *tag)
     }
 }
 
+int socket_KeepAlive(int fd, int interval)
+{
+    int val = 1;
+	//开启keepalive机制
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val)) == -1)
+    {
+        goto err;
+    }
+
+    val = interval;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val)) < 0) {
+        goto err;
+    }
+
+    val = interval/3;
+    if (val == 0) val = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val)) < 0) {
+        goto err;
+    }
+ 
+    val = 3;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val)) < 0) {
+        goto err;
+    }
+ 
+    return 0;
+err:
+    logp("setsockopt SO_KEEPALIVE: %s");
+    return -1;
+}
