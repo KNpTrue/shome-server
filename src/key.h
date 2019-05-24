@@ -84,4 +84,5 @@ bool isKeyRequired(_key_t *srckey, _key_t *req, uint8_t symbol);
 uint32_t getValueSize(uint8_t type);
 //拷贝key不包括key的部分
 void copyKeyHead_move(_key_t *key, void **buf);
+
 #endif //_KEY_H

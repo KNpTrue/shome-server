@@ -192,9 +192,13 @@ uint32_t getValueSize(uint8_t type)
 void copyKeyHead_move(_key_t *key, void **buf)
 {
     if(!key || !buf || !*buf)   return;
-    uint32_t len = offset_t(_key_t, unit) + UNIT_LEN;
-    memcpy(*buf, key, len);
-    *buf += len;
+    char *p = *buf;
+    //copy
+    strcpy(p, key->name); p += strlen(key->name) + 1;
+    *p++ = key->type;
+    *p++ = key->mode;
+    strcpy(p, key->unit); p += strlen(key->unit) + 1;
+    *buf = p;
 }
 
 void f2d( float f , void *x )

@@ -133,6 +133,7 @@ uint32_t json_analysis(const char *src, char *dest, uint32_t destlen_max)
                 default: break;
                 }
                 char *buf = malloc(BUF_LEN);
+                printKey(key);
                 uint32_t len = dev_makeData(buf, key);
                 EventConfig_t *evt = (EventConfig_t *)dev->ep_event;
                 evt->buflen = dev_enPackage(buf, len, evt->buf, BUF_LEN, rand);

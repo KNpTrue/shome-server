@@ -154,8 +154,9 @@ err:
 int writeConf()
 {
     FILE *fp = initConfFile("w");
-    writeWebConf(getWebConfig(), fp);
     if(fp == NULL)  return -1;
+    //web
+    writeWebConf(getWebConfig(), fp);
     //dev
     travelList(devlist_head, (manipulate_callback)writeDevConf, fp);
     //todo

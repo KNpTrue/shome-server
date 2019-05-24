@@ -11,7 +11,8 @@
 
 DevConfig_t *dev_handShake(const char *buf, uint32_t buflen)
 {
-    if(buf == NULL || buflen < 3 + ID_LEN)  goto err;
+    if(buf == NULL || buflen < 3 + ID_LEN + sizeof(dev_type_t) + KEY_COUNT_BYTE)
+        goto err;
     if(buf[0] != DEV_MAGIC[0] || buf[1] != DEV_MAGIC[1] ||
        buf[2] != DEV_MAGIC[2])
         goto err;
@@ -42,7 +43,7 @@ DevConfig_t *dev_handShake(const char *buf, uint32_t buflen)
     else
     {
         if (dev->keyList_head)   deleteList(&dev->keyList_head, NULL);
-        if (dev->ep_event)   
+        if (dev->ep_event)
         {
             loge("<dev_handShake>Device{%s} haven connected to this server.\n", dev->id);
             return NULL;
@@ -52,9 +53,6 @@ DevConfig_t *dev_handShake(const char *buf, uint32_t buflen)
     dev->type = type;
     //keyList
     uint8_t keyNum = *p++;
-    if(buflen < 3 + ID_LEN + sizeof(dev_type_t) + 
-       KEY_COUNT_BYTE + keyNum * (KEY_LEN + 1 + 1 + UNIT_LEN)) 
-        goto err;
     //将key串成链表
     node_t *head = NULL;
     _key_t *key;
@@ -66,12 +64,12 @@ DevConfig_t *dev_handShake(const char *buf, uint32_t buflen)
             deleteList(&head, NULL);
             goto err;
         }
-        strncpy(key->name, p, KEY_LEN);
-        p += KEY_LEN;
+        strcpy(key->name, p);
+        p += strlen(p) + 1;
         key->type = *p++;
         key->mode = *p++;
-        strncpy(key->unit, p, UNIT_LEN);
-        p += UNIT_LEN;
+        strcpy(key->unit, p);
+        p += strlen(p) + 1;
         appendTailList(&head, key);
     }
     dev->keyList_head = head;
@@ -103,7 +101,8 @@ int dev_getData(const char *buf, uint32_t buflen, DevConfig_t *devConfig)
 uint32_t dev_makeData(char *buf, _key_t *key)
 {
     *buf++ = DEV_PRO_SET;
-    memcpy(buf, key->name, KEY_LEN);
-    buf += KEY_LEN;
-    return valueToBuf(key, (void **)&buf) + KEY_LEN + 1;
+    strcpy(buf, key->name);
+    uint8_t namelen = strlen(key->name) + 1;
+    buf += namelen;
+    return valueToBuf(key, (void **)&buf) + namelen + 1;
 }

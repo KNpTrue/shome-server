@@ -63,7 +63,7 @@ int recvUart_cb(EventConfig_t *eventConfig)
         //校验码不准确
         if(uart_chkSum((uint8_t *)buf, uart->len) != buf[uart->len]) 
         {
-            printf("check error.\n");
+            loge("check error.\n");
             return 0;
         }
         zigbee_dev_t *dev = seachOneByRequired(zigbeeDevList_head, 
@@ -153,6 +153,7 @@ err:
 
 int sendClient_cb(EventConfig_t *connEvent)
 {
+    int ret;
     char *buf = connEvent->buf;
 #ifdef DEBUG
     printf("----send----buflen: %d\n", connEvent->buflen);
@@ -162,7 +163,11 @@ int sendClient_cb(EventConfig_t *connEvent)
         }
     printf("\n");
 #endif //DEBUG
-    Write(connEvent->fd, buf, connEvent->buflen); //回写客户端
+    ret = Write(connEvent->fd, buf, connEvent->buflen); //回写客户端
+    if(ret <= 0)
+    {
+        logd("write err.\n");
+    }
     //将事件切换成读事件
     _switchEventMode(connEvent, EPOLLIN);
     return 0;

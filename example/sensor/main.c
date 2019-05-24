@@ -28,7 +28,7 @@ int main()
     int fd = connServFd(AF_INET, SERV_ADDR, SERV_PORT);
     if(fd == -1)    return -1;
     //握手
-    char *keyName[] = {"温度", "湿度",NULL};
+    char *keyName[] = {"温度", NULL};
     uint8_t keyType[] = {KEY_NUMBER, KEY_NUMBER};
     uint8_t keyMode[] = {KEY_READONLY, KEY_READONLY};
     char *keyUnit[] = {"℃", "%RH"};

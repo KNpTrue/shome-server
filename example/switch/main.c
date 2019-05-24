@@ -23,7 +23,7 @@ int main()
     char ip[30];
     if(getGateWay(AF_INET, ip))
         printf("default gateway:%s\n", ip);
-    int fd = connServFd(AF_INET, ip, SERV_PORT);
+    int fd = connServFd(AF_INET, SERV_ADDR, SERV_PORT);
     if(fd == -1)    return -1;
     //握手
     char *keyName[] = {"isOpen", "R", "G", "B", "bright", NULL};
@@ -49,7 +49,7 @@ int main()
         p = buf2 + 1;
         key = seachOneByRequired(keylist_head, (required_callback)isSameKeyName, p);
         if(!key)    continue; 
-        p += KEY_LEN;
+        p += strlen(key->name) + 1;
         setKeyValue(key, (void *)p);
         //updateDev(key);
         printKey(key);

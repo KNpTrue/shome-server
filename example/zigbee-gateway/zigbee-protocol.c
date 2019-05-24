@@ -44,6 +44,8 @@ int uart_init(const char *path)
 
     //关闭硬件流控
     //opts.c_cflag &= ~CRTSCTS;
+    opts.c_iflag &= ~(INLCR | ICRNL);
+    opts.c_iflag &= ~(IXON | IXOFF | IXANY);
 
     // raw input: 即让uart接收到什么样的数据不要自己处理，直接交过来
     opts.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
