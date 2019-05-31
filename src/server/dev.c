@@ -22,20 +22,21 @@ void setNull_cb(void *data, uint8_t *type);
 /**
  * 每次都返回最大的ID
 */
-void getMaxId(ext_base_t *ext, uint8_t *max)
+void getMaxId(ext_base_t *ext, int *max)
 {
-    if(!ext)   return;
-    if(ext->id > *max)   *max = ext->id;
+    if (!ext)   return;
+    if ((int)ext->id > *max)   *max = ext->id;
 }
 
-uint8_t ext_getNewId(node_t *head)
+int ext_getNewId(node_t *head)
 {
-    int max = 0;
+    int max = -1;
     travelList(head, (manipulate_callback)getMaxId, &max);
+    
     return max + 1;
 }
 
-void ext_sortId_cb(ext_base_t *ext, uint8_t *tmp)
+void ext_sortId_cb(ext_base_t *ext, int *tmp)
 {
     ext->id = *tmp + 1;
     (*tmp)++;
@@ -233,7 +234,7 @@ void destoryTaskDev(task_dev_t *task)
 
 void runTaskDev(task_dev_t *task)
 {
-    if(task && task->isUpdated == true) return;
+    if(task && task->isUpdated) return;
     EventConfig_t *evt = ((DevConfig_t *)task->devConfig)->ep_event;
     if(!evt)    return;
     memset(evt->buf, 0, BUF_LEN);

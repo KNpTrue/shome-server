@@ -8,7 +8,7 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
-#define DEV_CONF_PATH "/etc/shome.conf"
+#define DEV_CONF_PATH "shome.conf"
 
 int readConf();
 

@@ -44,7 +44,7 @@ extern node_t *roomlist_head;
  * @head ext_base子类的链表
  * @return new id
 */
-uint8_t ext_getNewId(node_t *head);
+int ext_getNewId(node_t *head);
 
 /**
  * @brief 对Id进行重新排序 回调函数
@@ -52,7 +52,7 @@ uint8_t ext_getNewId(node_t *head);
  * @param tmp 传入的ID, 每次会叠加
  * @example uint32_t tmp; travelList(list_head, (manipulate_callback)ext_sortId_cb, &tmp);
 */
-void ext_sortId_cb(ext_base_t *ext, uint8_t *tmp);
+void ext_sortId_cb(ext_base_t *ext, int *tmp);
 /**
  * @brief 比较ID
 */
